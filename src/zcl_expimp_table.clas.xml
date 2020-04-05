@@ -11,6 +11,20 @@
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
    </VSEOCLASS>
+   <DESCRIPTIONS>
+    <SEOCOMPOTX>
+     <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+     <CMPNAME>EXPORT_ALL</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Write all data objects (replace all)</DESCRIPT>
+    </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+     <CMPNAME>IMPORT_ALL</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Read all data objects</DESCRIPT>
+    </SEOCOMPOTX>
+   </DESCRIPTIONS>
   </asx:values>
  </asx:abap>
 </abapGit>

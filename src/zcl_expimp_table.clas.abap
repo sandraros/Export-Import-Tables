@@ -1,3 +1,6 @@
+"! <p class="shorttext synchronized" lang="en">Utility for export/import tables</p>
+"! See demo program Z_EXPIMP_TABLE_DEMO.
+"! It's also used by ZCL_FM_TEST_DATA.
 CLASS zcl_expimp_table DEFINITION
   PUBLIC
   FINAL
@@ -5,155 +8,78 @@ CLASS zcl_expimp_table DEFINITION
 
   PUBLIC SECTION.
 
+    "! Advantages of the method IMPORT_ALL compared to the classic IMPORT ... FROM DATABASE ...:<br/>
+    "! <ul>
+    "! <li>Indicate the table name and the area dynamically</li>
+    "! <li>Read all the data objects of the data cluster, no need of
+    "! indicating the types and names of data objects to read.</li>
+    "! </ul>
+    "! Example:<br/>
+    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
+    "! DATA(id_wa) = VALUE eufunc( gruppe = 'SCAL' name = 'DATE_GET_WEEK' nummer = nummer ).<br/>
+    "! zcl_expimp_table=>import_all(<br/>
+    "! &nbsp;&nbsp;&nbsp;EXPORTING client = '100' table_name = 'EUFUNC' area = 'FL'<br/>
+    "! &nbsp;&nbsp;&nbsp;IMPORTING tab_cpar = DATA(tab_cpar)<br/>
+    "! &nbsp;&nbsp;&nbsp;CHANGING  id_wa = id_wa.<br/>
+    "! DATA(dref) = tab_cpar[ name = '%_IDATE' ]-dref.<br/>
+    "! DATA(date1) = CAST d( dref )->*. " Here the developer knows that %_IDATE is of type D.<br/>
+    "! <br/>
+    "! is equivalent to:<br/>
+    "! <br/>
+    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
+    "! DATA(id) = VALUE functdir( area = 'SCAL' progid = 'DATE_GET_WEEK' dataid = nummer ).<br/>
+    "! <br/>
+    "! IMPORT %_idate = date1 FROM DATABASE eufunc(fl) ID id TO wa.<br/>
+    "! <br/>
+    "! Conversion options (ACCEPTING, IGNORING, etc.) are currently not possible.
+    "! <p class="shorttext synchronized" lang="en">Read all data objects</p>
+    "!
+    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter table_name | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id_wa | <p class="shorttext synchronized" lang="en">Send ID part, receive WA part (must be type &gt;table_name&lt;)</p>
+    "!                  | Must be of type indicated in parameter TABLE_NAME. The key fields are
+    "!                  | used to select the data cluster to read, and the eventual attribute fields
+    "!                  | which are read from the data cluster are initialized.
     CLASS-METHODS import_all
       IMPORTING
-        mandant                  TYPE mandt DEFAULT sy-mandt
-        export_import_table_name TYPE tabname
-        area                     TYPE relid
+        client     TYPE symandt DEFAULT sy-mandt
+        table_name TYPE tabname
+        area       TYPE relid
       EXPORTING
-        tab_cpar                 TYPE tab_cpar
+        tab_cpar   TYPE tab_cpar
       CHANGING
-        id_wa                    TYPE any.
+        id_wa      TYPE any.
 
+    "! <p class="shorttext synchronized" lang="en">Write all data objects (replace all)</p>
+    "!
+    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter table_name | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id_wa | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter compression | <p class="shorttext synchronized" lang="en"></p>
     CLASS-METHODS export_all
       IMPORTING
-        mandant                  TYPE mandt DEFAULT sy-mandt
-        tabname TYPE tabname
-        area                     TYPE relid
-        id_wa                    TYPE any
-        tab_cpar                 TYPE tab_cpar.
+        client      TYPE mandt DEFAULT sy-mandt
+        table_name  TYPE tabname
+        area        TYPE relid
+        id_wa       TYPE any
+        tab_cpar    TYPE tab_cpar
+        compression TYPE abap_bool DEFAULT abap_false
+      RAISING
+        zcx_expimp_table.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
 ENDCLASS.
 
+
+
 CLASS zcl_expimp_table IMPLEMENTATION.
 
-  METHOD import_all.
-
-    DATA:
-      ls_dd02l        TYPE dd02l,
-      lt_dd03l        TYPE TABLE OF dd03l,
-      fieldname_mandt TYPE fieldname,
-      area_index      TYPE i,
-      ref_table       TYPE REF TO data,
-      offset_clustr   TYPE i,
-      offset_clustd   TYPE i,
-      xstring         TYPE xstring,
-      where           TYPE string,
-      skip            TYPE i,
-      string          TYPE string.
-    FIELD-SYMBOLS:
-      <ls_dd02l>       TYPE dd02l,
-      <ls_dd03l_mandt> TYPE dd03l,
-      <ls_dd03l_area>  TYPE dd03l,
-      <table>          TYPE STANDARD TABLE,
-      <first_field>    TYPE any,
-      <line_fs>        TYPE x,
-      <clustr>         TYPE any,
-      <clustd>         TYPE any,
-      <ls_dd03l>       TYPE dd03l,
-      <first_line>     TYPE any,
-      <length>         TYPE int2.
-
-
-    SELECT SINGLE * FROM dd02l
-      WHERE tabname  = @export_import_table_name
-        AND as4local = 'A'
-        AND as4vers  = 0
-      INTO @ls_dd02l.
-    CHECK sy-subrc = 0.
-    ASSIGN ls_dd02l TO <ls_dd02l>.
-
-    " Key columns except Client, RELID and SRTF2.
-    SELECT * FROM dd03l
-      INTO TABLE lt_dd03l
-      WHERE tabname = export_import_table_name
-        AND keyflag = 'X'
-        AND as4local = 'A'
-        AND as4vers = 0
-        AND fieldname NOT LIKE '.%'
-        AND fieldname NE 'SRTF2'.
-
-    SORT lt_dd03l BY position.
-
-
-    " Build WHERE
-    IF <ls_dd02l>-clidep = abap_true.
-      READ TABLE lt_dd03l WITH KEY datatype = 'CLNT' ASSIGNING <ls_dd03l_mandt>.
-      fieldname_mandt = <ls_dd03l_mandt>-fieldname.
-    ELSE.
-      UNASSIGN <ls_dd03l_mandt>.
-      CLEAR fieldname_mandt.
-    ENDIF.
-
-    IF <ls_dd02l>-clidep = abap_true.
-      area_index = 2.
-    ELSE.
-      area_index = 1.
-    ENDIF.
-    READ TABLE lt_dd03l INDEX area_index ASSIGNING <ls_dd03l_area>.
-    ASSERT sy-subrc = 0.
-
-    where = ''.
-    IF <ls_dd02l>-clidep = abap_true.
-      where = |{ <ls_dd03l_mandt>-fieldname } = '{ mandant }' AND |.
-    ENDIF.
-    where = |{ where }{ <ls_dd03l_area>-fieldname } = { cl_abap_dyn_prg=>quote( area ) }|.
-
-    IF <ls_dd02l>-clidep = abap_false.
-      skip = 1.
-    ELSE.
-      skip = 2.
-    ENDIF.
-    LOOP AT lt_dd03l ASSIGNING <ls_dd03l> WHERE tabname = <ls_dd02l>-tabname.
-      IF skip <> 0.
-        SUBTRACT 1 FROM skip.
-      ELSE.
-        ASSIGN COMPONENT <ls_dd03l>-fieldname OF STRUCTURE id_wa TO FIELD-SYMBOL(<field>).
-        IF sy-subrc <> 0.
-          " raise error
-        ENDIF.
-        where = |{ where } AND { <ls_dd03l>-fieldname } = { cl_abap_dyn_prg=>quote( <field> ) }|.
-      ENDIF.
-    ENDLOOP.
-
-    " Equivalent to IMPORT (all-fields) FROM DATABASE <table>(<area>) TO <wa> CLIENT <client> ID <id>
-    CREATE DATA ref_table TYPE TABLE OF (<ls_dd02l>-tabname).
-    ASSIGN ref_table->* TO <table>.
-    SELECT * FROM (<ls_dd02l>-tabname) CLIENT SPECIFIED
-          INTO TABLE <table>
-          WHERE (where).
-    IF sy-subrc <> 0.
-      " NOT FOUND
-      RETURN.
-    ENDIF.
-
-    SORT <table> BY table_line.
-
-    " TAB_CPAR
-    READ TABLE <table> INDEX 1 ASSIGNING <first_line>.
-    ASSIGN COMPONENT 1 OF STRUCTURE <first_line> TO <first_field>.
-    ASSIGN COMPONENT 'CLUSTR' OF STRUCTURE <first_line> TO <clustr>.
-    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO offset_clustr IN BYTE MODE.
-    ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <first_line> TO <clustd>.
-    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustd> INTO offset_clustd IN BYTE MODE.
-
-    CLEAR xstring.
-    LOOP AT <table> ASSIGNING <line_fs> CASTING.
-      ASSIGN <line_fs>+offset_clustr(2) TO <length> CASTING.
-      CONCATENATE xstring <line_fs>+offset_clustd(<length>) INTO xstring IN BYTE MODE.
-    ENDLOOP.
-
-    tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
-
-    " WA
-    CLEAR <clustr>.
-    CLEAR <clustd>.
-    id_wa = <first_line>.
-
-  ENDMETHOD.
 
   METHOD export_all.
 
@@ -229,18 +155,23 @@ CLASS zcl_expimp_table IMPLEMENTATION.
           level2 = 0.
           level1 = level1 + 1.
           IF level1 = 10.
-            " TODO MORE THAN 1000 DATA OBJECTS !
+            " MORE THAN 1000 DATA OBJECTS !
+            RAISE EXCEPTION TYPE zcx_expimp_table.
           ENDIF.
         ENDIF.
       ENDIF.
 
     ENDLOOP.
 
-    EXPORT (pdat_lines) TO DATA BUFFER xstring COMPRESSION ON.
+    IF compression = abap_false.
+      EXPORT (pdat_lines) TO DATA BUFFER xstring COMPRESSION OFF.
+    ELSE.
+      EXPORT (pdat_lines) TO DATA BUFFER xstring COMPRESSION ON.
+    ENDIF.
 
-    CREATE DATA ref_line TYPE (tabname).
+    CREATE DATA ref_line TYPE (table_name).
     ASSIGN ref_line->* TO FIELD-SYMBOL(<line>).
-    CREATE DATA ref_table TYPE TABLE OF (tabname).
+    CREATE DATA ref_table TYPE TABLE OF (table_name).
     ASSIGN ref_table->* TO <table>.
 
     ASSIGN COMPONENT 1 OF STRUCTURE <line> TO FIELD-SYMBOL(<first_field>).
@@ -254,9 +185,9 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     DESCRIBE FIELD <clustd> LENGTH DATA(length_clustd) IN BYTE MODE.
 
     <line> = id_wa.
-    " Inject MANDANT + AREA + ID into <line>
+    " Inject CLIENT + AREA + ID into <line>
     IF offset_relid > 0.
-      <first_field> = mandant.
+      <first_field> = client.
     ENDIF.
     <relid> = area.
 
@@ -274,9 +205,132 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       ADD 1 TO <srtf2>.
     ENDWHILE.
 
-    MODIFY (tabname) FROM TABLE <table>.
+    MODIFY (table_name) FROM TABLE <table>.
+
+  ENDMETHOD.
+
+
+  METHOD import_all.
+
+    DATA:
+      ls_dd02l        TYPE dd02l,
+      lt_dd03l        TYPE TABLE OF dd03l,
+      fieldname_mandt TYPE fieldname,
+      area_index      TYPE i,
+      ref_table       TYPE REF TO data,
+      offset_clustr   TYPE i,
+      offset_clustd   TYPE i,
+      xstring         TYPE xstring,
+      where           TYPE string,
+      skip            TYPE i,
+      string          TYPE string.
+    FIELD-SYMBOLS:
+      <ls_dd02l>       TYPE dd02l,
+      <ls_dd03l_mandt> TYPE dd03l,
+      <ls_dd03l_area>  TYPE dd03l,
+      <table>          TYPE STANDARD TABLE,
+      <first_field>    TYPE any,
+      <line_fs>        TYPE x,
+      <clustr>         TYPE any,
+      <clustd>         TYPE any,
+      <ls_dd03l>       TYPE dd03l,
+      <first_line>     TYPE any,
+      <length>         TYPE int2.
+
+
+    SELECT SINGLE * FROM dd02l
+      WHERE tabname  = @table_name
+        AND as4local = 'A'
+        AND as4vers  = 0
+      INTO @ls_dd02l.
+    CHECK sy-subrc = 0.
+    ASSIGN ls_dd02l TO <ls_dd02l>.
+
+    " Key columns except Client, RELID and SRTF2.
+    SELECT * FROM dd03l
+      INTO TABLE lt_dd03l
+      WHERE tabname = table_name
+        AND keyflag = 'X'
+        AND as4local = 'A'
+        AND as4vers = 0
+        AND fieldname NOT LIKE '.%'
+        AND fieldname NE 'SRTF2'.
+
+    SORT lt_dd03l BY position.
+
+
+    " Build WHERE
+    IF <ls_dd02l>-clidep = abap_true.
+      READ TABLE lt_dd03l WITH KEY datatype = 'CLNT' ASSIGNING <ls_dd03l_mandt>.
+      fieldname_mandt = <ls_dd03l_mandt>-fieldname.
+    ELSE.
+      UNASSIGN <ls_dd03l_mandt>.
+      CLEAR fieldname_mandt.
+    ENDIF.
+
+    IF <ls_dd02l>-clidep = abap_true.
+      area_index = 2.
+    ELSE.
+      area_index = 1.
+    ENDIF.
+    READ TABLE lt_dd03l INDEX area_index ASSIGNING <ls_dd03l_area>.
+    ASSERT sy-subrc = 0.
+
+    where = ''.
+    IF <ls_dd02l>-clidep = abap_true.
+      where = |{ <ls_dd03l_mandt>-fieldname } = '{ client }' AND |.
+    ENDIF.
+    where = |{ where }{ <ls_dd03l_area>-fieldname } = { cl_abap_dyn_prg=>quote( area ) }|.
+
+    IF <ls_dd02l>-clidep = abap_false.
+      skip = 1.
+    ELSE.
+      skip = 2.
+    ENDIF.
+    LOOP AT lt_dd03l ASSIGNING <ls_dd03l> WHERE tabname = <ls_dd02l>-tabname.
+      IF skip <> 0.
+        SUBTRACT 1 FROM skip.
+      ELSE.
+        ASSIGN COMPONENT <ls_dd03l>-fieldname OF STRUCTURE id_wa TO FIELD-SYMBOL(<field>).
+        IF sy-subrc <> 0.
+          " raise error
+        ENDIF.
+        where = |{ where } AND { <ls_dd03l>-fieldname } = { cl_abap_dyn_prg=>quote( <field> ) }|.
+      ENDIF.
+    ENDLOOP.
+
+    " Equivalent to IMPORT (all-fields) FROM DATABASE <table>(<area>) TO <wa> CLIENT <client> ID <id>
+    CREATE DATA ref_table TYPE TABLE OF (<ls_dd02l>-tabname).
+    ASSIGN ref_table->* TO <table>.
+    SELECT * FROM (<ls_dd02l>-tabname) CLIENT SPECIFIED
+          INTO TABLE <table>
+          WHERE (where).
+    IF sy-subrc <> 0.
+      " NOT FOUND
+      RETURN.
+    ENDIF.
+
+    SORT <table> BY table_line.
+
+    " TAB_CPAR
+    READ TABLE <table> INDEX 1 ASSIGNING <first_line>.
+    ASSIGN COMPONENT 1 OF STRUCTURE <first_line> TO <first_field>.
+    ASSIGN COMPONENT 'CLUSTR' OF STRUCTURE <first_line> TO <clustr>.
+    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO offset_clustr IN BYTE MODE.
+    ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <first_line> TO <clustd>.
+    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustd> INTO offset_clustd IN BYTE MODE.
+
+    CLEAR xstring.
+    LOOP AT <table> ASSIGNING <line_fs> CASTING.
+      ASSIGN <line_fs>+offset_clustr(2) TO <length> CASTING.
+      CONCATENATE xstring <line_fs>+offset_clustd(<length>) INTO xstring IN BYTE MODE.
+    ENDLOOP.
+
+    tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
+
+    " WA
+    id_wa = <first_line>.
 
   ENDMETHOD.
 
 ENDCLASS.
-
