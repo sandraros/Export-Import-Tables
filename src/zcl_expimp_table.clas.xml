@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_CLAS" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <VSEOCLASS>
+    <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+    <LANGU>E</LANGU>
+    <DESCRIPT>Utility for export/import tables</DESCRIPT>
+    <STATE>1</STATE>
+    <CLSCCINCL>X</CLSCCINCL>
+    <FIXPT>X</FIXPT>
+    <UNICODE>X</UNICODE>
+    <WITH_UNIT_TESTS>X</WITH_UNIT_TESTS>
+   </VSEOCLASS>
+   <DESCRIPTIONS>
+    <SEOCOMPOTX>
+     <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+     <CMPNAME>CREATE_KEYTAB_FOR_GET_KEYS</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Utility for methods *_GET_KEYS of CL_ABAP_EXPIMP_UTILITIES</DESCRIPT>
+    </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+     <CMPNAME>EXPORT_ALL</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Write all data objects (replace all)</DESCRIPT>
+    </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
+     <CMPNAME>IMPORT_ALL</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Read all data objects of a data cluster</DESCRIPT>
+    </SEOCOMPOTX>
+   </DESCRIPTIONS>
+  </asx:values>
+ </asx:abap>
+</abapGit>
