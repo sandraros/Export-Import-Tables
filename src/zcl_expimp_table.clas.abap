@@ -333,6 +333,11 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         xstring = DATA(xstring)
         wa      = wa ).
 
+    IF xstring IS INITIAL.
+      " Not found
+      RETURN.
+    ENDIF.
+
     tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
 
   ENDMETHOD.
@@ -447,34 +452,29 @@ CLASS zcl_expimp_table IMPLEMENTATION.
   METHOD describe_export_import_table.
 
     DATA:
-      ls_dd02l   TYPE dd02l,
-      lt_dd03l   TYPE TABLE OF dd03l,
       area_index TYPE i,
       ref_line   TYPE REF TO data.
     FIELD-SYMBOLS:
-      <ls_dd03l>     TYPE dd03l,
-      <first_field>  TYPE any,
-      <dd03l_clustr> TYPE dd03l,
-      <dd03l_clustd> TYPE dd03l,
-      <clustr>       TYPE any,
-      <clustd>       TYPE any,
-      <line>         TYPE any.
+      <first_field> TYPE any,
+      <clustr>      TYPE any,
+      <clustd>      TYPE any,
+      <line>        TYPE any.
 
     " Table must be active and transparent
-    SELECT SINGLE * FROM dd02l
+    SELECT COUNT(*) FROM dd02l
       WHERE tabname  = @tabname
         AND as4local = 'A'
         AND as4vers  = 0
-        AND tabclass = 'TRANSP'
-      INTO @ls_dd02l.
+        AND tabclass = 'TRANSP'.
     IF sy-subrc <> 0.
       RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>table_does_not_exist.
     ENDIF.
 
     " Table columns
-    SELECT * FROM dd03l
-      INTO TABLE lt_dd03l
-      WHERE tabname = tabname
+    SELECT tabname, fieldname, keyflag, position, rollname, datatype, leng, inttype, intlen
+        FROM dd03l
+      INTO TABLE @DATA(lt_dd03l)
+      WHERE tabname = @tabname
         AND as4local = 'A'
         AND as4vers = 0
         AND fieldname NOT LIKE '.%'.
@@ -492,41 +492,47 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     DATA(clustr_position) = 0.
     DATA(clustd_position) = 0.
 
-    LOOP AT lt_dd03l ASSIGNING <ls_dd03l>.
+    LOOP AT lt_dd03l ASSIGNING FIELD-SYMBOL(<ls_dd03l>).
       DATA(field_position) = sy-tabix.
 
       IF <ls_dd03l>-keyflag = 'X'.
         ADD 1 TO number_of_key_fields.
       ENDIF.
 
-      IF field_position = 1 AND <ls_dd03l>-keyflag = 'X' AND <ls_dd03l>-datatype = 'CLNT'.
+      IF field_position = 1
+            AND <ls_dd03l>-keyflag = 'X'
+            AND <ls_dd03l>-datatype = 'CLNT'.
         clnt_position = field_position.
         result-client_fieldname = abap_true.
       ENDIF.
 
       CASE <ls_dd03l>-fieldname.
         WHEN 'RELID'.
-          IF <ls_dd03l>-datatype <> 'CHAR' AND <ls_dd03l>-leng <> 2.
+          IF <ls_dd03l>-datatype <> 'CHAR'
+                AND <ls_dd03l>-leng <> 2.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           relid_position = field_position.
         WHEN 'SRTF2'.
-          IF <ls_dd03l>-datatype <> 'INT4'.
+          IF <ls_dd03l>-datatype <> 'INT1'
+                AND <ls_dd03l>-datatype <> 'INT2'
+                AND <ls_dd03l>-datatype <> 'INT4'.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           srtf2_position = field_position.
         WHEN 'CLUSTR'.
-          IF <ls_dd03l>-datatype <> 'INT2' AND <ls_dd03l>-datatype <> 'INT4'.
+          IF <ls_dd03l>-datatype <> 'INT2'.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           clustr_position = field_position.
-          ASSIGN <ls_dd03l> TO <dd03l_clustr>.
+          ASSIGN <ls_dd03l> TO FIELD-SYMBOL(<dd03l_clustr>).
         WHEN 'CLUSTD'.
-          IF <ls_dd03l>-inttype <> 'X' AND <ls_dd03l>-datatype <> 'RSTR'.
+          IF <ls_dd03l>-datatype <> 'LRAW' " LRAW required for Multiple Rows data clusters
+                AND <ls_dd03l>-datatype <> 'RSTR'. " RAWSTRING required for One Row data clusters
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           clustd_position = field_position.
-          ASSIGN <ls_dd03l> TO <dd03l_clustd>.
+          ASSIGN <ls_dd03l> TO FIELD-SYMBOL(<dd03l_clustd>).
       ENDCASE.
 
       IF <ls_dd03l>-keyflag = 'X'
@@ -584,11 +590,11 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     " Check kind of export/import table
     IF srtf2_position <> 0
         AND clustr_position <> 0
-        AND <dd03l_clustd>-inttype = 'X'.
+        AND <dd03l_clustd>-inttype = 'X'. " VARC or LRAW
       result-is_structure_751 = abap_false.
     ELSEIF srtf2_position = 0
         AND clustr_position = 0
-        AND <dd03l_clustd>-datatype = 'RSTR'.
+        AND <dd03l_clustd>-rollname = 'INDX_CLUST_BLOB'.
       result-is_structure_751 = abap_true.
     ELSE.
       RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
