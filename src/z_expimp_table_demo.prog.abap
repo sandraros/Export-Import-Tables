@@ -15,10 +15,14 @@ ENDCLASS.
 CLASS lcl_app IMPLEMENTATION.
   METHOD main.
 
+  DATA: date2 TYPE scal-date,
+        wa1   TYPE eufunc,
+        wa2   TYPE eufunc.
+
     SELECT *
         FROM eufunc
         WHERE gruppe = 'SCAL'
-          AND name = 'DATE_GET_WEEK'
+          AND name   = 'DATE_GET_WEEK'
           AND nummer <> '999'
         INTO TABLE @DATA(id_wa_lines).
 
@@ -35,11 +39,14 @@ CLASS lcl_app IMPLEMENTATION.
 
       " Method IMPORT_ALL
       zcl_expimp_table=>import_all(
-         EXPORTING client    = sy-mandt
-                   table_name = 'EUFUNC'
-                   area       = 'FL'
-         IMPORTING tab_cpar   = DATA(tab_cpar)
-         CHANGING  id_wa      = id_wa ).
+         EXPORTING
+            client   = sy-mandt
+            tabname  = 'EUFUNC'
+            area     = 'FL'
+            id_new   = id_wa
+         IMPORTING
+            tab_cpar = DATA(tab_cpar)
+            wa       = wa1 ).
 
       DATA(dref) = tab_cpar[ name = '%_IDATE' ]-dref.
       DATA(date1) = CAST d( dref )->*.
@@ -49,16 +56,14 @@ CLASS lcl_app IMPLEMENTATION.
           area   = 'SCAL'
           progid = 'DATE_GET_WEEK'
           dataid = id_wa-nummer ).
-      DATA: date2 TYPE scal-date,
-            wa    TYPE eufunc.
 
-      IMPORT %_idate = date2 FROM DATABASE eufunc(fl) CLIENT sy-mandt ID id TO wa.
+      IMPORT %_idate = date2 FROM DATABASE eufunc(fl) CLIENT sy-mandt ID id TO wa2.
 
       " For some reasons, the first byte of WA-CLUSTD is set to 00 by SAP (7.52), don't know why.
       " So, for the equality assertion, copy the first byte.
-      wa-clustd(1) = id_wa-clustd(1).
+      wa2-clustd(1) = wa1-clustd(1).
 
-      IF date2 <> date1 OR wa <> id_wa.
+      IF date2 <> date1 OR wa1 <> wa2.
         messages = VALUE #(
             BASE messages
             ( |ALERT: method IMPORT_ALL does not behave consistently with ABAP statement IMPORT| ) ).

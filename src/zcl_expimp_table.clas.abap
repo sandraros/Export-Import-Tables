@@ -1,8 +1,5 @@
 "! <p class="shorttext synchronized" lang="en">Utility for export/import tables</p>
 "! See demonstration in program Z_EXPIMP_TABLE_DEMO.
-"! Projects using it:<ul>
-"! <li>https://github.com/sandraros/FM-Test-Data</li>
-"! </ul>
 "! NB:<ul>
 "! <li>Dynamic deletion may be achieved using CL_ABAP_EXPIMP_UTILITIES=>DB_DELETE</li>
 "! </ul>
@@ -79,24 +76,95 @@ CLASS zcl_expimp_table DEFINITION
       RAISING
         zcx_expimp_table.
 
-  PROTECTED SECTION.
-  PRIVATE SECTION.
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter tabname | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter result | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS is_valid_expimp_table
+      IMPORTING
+        tabname       TYPE tabname
+      RETURNING
+        VALUE(result) TYPE abap_bool.
 
     TYPES: BEGIN OF ty_id_field,
              fieldname TYPE fieldname,
              offset    TYPE i,
              length    TYPE i,
            END OF ty_id_field,
-           BEGIN OF ty_descr_export_import_table,
-             is_structure_751 TYPE abap_bool,
-             client_fieldname TYPE fieldname,
-             id_fields        TYPE STANDARD TABLE OF ty_id_field WITH EMPTY KEY,
-             wa_fieldnames    TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY,
-             offset_clustr    TYPE i,
-             clustr_length    TYPE i,
-             offset_clustd    TYPE i,
-             clustd_length    TYPE i,
-           END OF ty_descr_export_import_table.
+           BEGIN OF ty_expimp_table_info,
+             is_structure_one_row TYPE abap_bool,
+             client_fieldname     TYPE fieldname,
+             id_fields            TYPE STANDARD TABLE OF ty_id_field WITH EMPTY KEY,
+             attr_fieldnames      TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY,
+             offset_clustr        TYPE i,
+             clustr_length        TYPE i,
+             offset_clustd        TYPE i,
+             clustd_length        TYPE i,
+           END OF ty_expimp_table_info.
+
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter info | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising zcx_expimp_table | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS get_info
+      IMPORTING
+        tabname     TYPE tabname
+      RETURNING
+        VALUE(info) TYPE ty_expimp_table_info
+      RAISING
+        zcx_expimp_table.
+
+    "! <p class="shorttext synchronized" lang="en">Utility for methods *_GET_KEYS of CL_ABAP_EXPIMP_UTILITIES</p>
+    "!
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter with_user_header | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter client_specified | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter ref_to_KEYtab | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS create_keytab_for_get_keys
+      IMPORTING
+        tabname              TYPE tabname
+        with_user_header     TYPE abap_bool DEFAULT abap_false
+        client_specified     TYPE abap_bool DEFAULT abap_false
+      RETURNING
+        VALUE(ref_to_keytab) TYPE REF TO data
+      RAISING
+        zcx_expimp_table.
+
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter CLIENT | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter AREA | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter ID | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter GENERIC_KEY | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter WITH_USER_HEADER | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter CLIENT_SPECIFIED | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter KEYTAB | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising CX_SY_CLIENT | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising CX_SY_GENERIC_KEY | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising CX_SY_TABLINE_TOO_SHORT | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising CX_SY_INCORRECT_KEY | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS get_keys
+      IMPORTING
+        !tabname          TYPE csequence
+        !client           TYPE mandt OPTIONAL
+        !area             TYPE relid OPTIONAL
+        !id               TYPE clike OPTIONAL
+        !generic_key      TYPE abap_bool DEFAULT abap_false
+        !with_user_header TYPE abap_bool DEFAULT abap_false
+        !client_specified TYPE abap_bool DEFAULT abap_false
+      EXPORTING
+        !keytab           TYPE STANDARD TABLE
+      RAISING
+        zcx_expimp_table
+        cx_sy_client
+        cx_sy_generic_key
+        cx_sy_tabline_too_short
+        cx_sy_incorrect_key .
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
 
     CLASS-METHODS import_from_database_2_xstring
       IMPORTING
@@ -111,29 +179,501 @@ CLASS zcl_expimp_table DEFINITION
       RAISING
         zcx_expimp_table.
 
-    CLASS-METHODS describe_export_import_table
+    CLASS-METHODS _build_where
       IMPORTING
-        tabname       TYPE tabname
+        client         TYPE mandt
+        area           TYPE relid
+        id             TYPE clike
+        id_new         TYPE any
+        info           TYPE zcl_expimp_table=>ty_expimp_table_info
       RETURNING
-        VALUE(result) TYPE ty_descr_export_import_table
-      RAISING
-        zcx_expimp_table.
-
-    TYPES: BEGIN OF ty_expimp_table,
-             has_client_field TYPE abap_bool,
-             is_structure_751 TYPE abap_bool,
-             columns          TYPE STANDARD TABLE OF dd03l-fieldname WITH EMPTY KEY,
-             id_first         TYPE i,
-             id_last          TYPE i,
-             attr_first       TYPE i,
-             attr_last        TYPE i,
-           END OF ty_expimp_table.
+        VALUE(r_where) TYPE string.
 
 ENDCLASS.
 
 
 
 CLASS zcl_expimp_table IMPLEMENTATION.
+
+
+  METHOD create_keytab_for_get_keys.
+
+    DATA(info) = zcl_expimp_table=>get_info( tabname ).
+
+    DATA(lo_struct) = cl_abap_structdescr=>create( VALUE #(
+        ( LINES OF COND #( WHEN client_specified = abap_true
+                    AND info-client_fieldname IS NOT INITIAL THEN VALUE #(
+            ( name = info-client_fieldname
+              type = CAST #( cl_abap_typedescr=>describe_by_data( sy-mandt ) ) ) ) ) )
+        ( LINES OF VALUE #(
+            ( name = 'RELID'
+              type = CAST #( cl_abap_elemdescr=>get_c( 2 ) ) ) ) )
+        ( LINES OF VALUE #(
+            FOR <id_field> IN info-id_fields
+            ( name = <id_field>-fieldname
+              type = CAST #( cl_abap_typedescr=>describe_by_name( |{ tabname }-{ <id_field>-fieldname }| ) ) ) ) )
+        ( LINES OF COND #( WHEN with_user_header = abap_true THEN VALUE #(
+            FOR <fieldname> IN info-attr_fieldnames
+            ( name = <fieldname>
+              type = CAST #( cl_abap_typedescr=>describe_by_data( sy-mandt ) ) ) ) ) ) ) ).
+
+    DATA(lo_table) = cl_abap_tabledescr=>create( p_line_type = lo_struct ).
+
+    CREATE DATA ref_to_keytab TYPE HANDLE lo_table.
+
+  ENDMETHOD.
+
+
+  METHOD get_keys.
+
+    " There are 2 bugs in versions up to 7.52 (I don't know after 7.52)
+    " Bug 1: standard code assumes client field is always named MANDT, but it may differ
+    "        and in that case CX_SY_DYNAMIC_OSQL_SYNTAX occurs (but not handled -> CX_SY_NO_HANDLER)
+    " Bug 2: if WITH_USER_HEADER = 'X', standard code almost always triggers CX_SY_TABLINE_TOO_SHORT,
+    "        I don't do the correction because after the most simple correction, there are
+    "        many other issues. Anyway, I guess that WITH_USER_HEADER makes no sense in a
+    "        method used to GET KEYS, so no need to spend time on it.
+    DATA(bugged) = COND abap_bool(
+        WHEN sy-saprl > '752'
+            THEN abap_false
+        ELSE COND #( LET info = get_info( tabname ) IN WHEN info-client_fieldname <> 'MANDT'
+            THEN abap_true ) ).
+    IF bugged = abap_false.
+      cl_abap_expimp_utilities=>db_get_keys(
+        EXPORTING
+          tabname                 = tabname
+          client                  = client
+          area                    = area
+          id                      = id
+          generic_key             = generic_key
+          with_user_header        = with_user_header
+          client_specified        = client_specified
+        IMPORTING
+          keytab                  = keytab ).
+      RETURN.
+    ENDIF.
+
+    CLASS cl_abap_char_utilities DEFINITION LOAD.
+
+    TYPES: t_src(108) TYPE c,
+           BEGIN OF id_field,
+             name     TYPE t_src,
+             position TYPE i,
+           END OF id_field.
+
+    DATA: spc TYPE string.               "string containing a blank
+    SHIFT spc RIGHT BY 1 PLACES.         "character
+
+    DATA: client_clean TYPE string.   " these strings contain the IMPORTed
+    DATA: area_clean   TYPE string.   " parameters, with SQL-sensitive
+    " characters escaped by #
+
+* value of 'generic' that is used for the actual query (see below)
+    DATA: generic_clean TYPE abap_bool.
+
+* TRUE iff id is not supplied or initial
+    DATA empty_id       TYPE abap_bool.
+
+* id (if supplied)
+    DATA string_id      TYPE string.
+
+* id length (if supplied)
+    DATA input_id_length TYPE id.
+
+* TRUE iff area is not supplied or initial
+    DATA empty_area     TYPE abap_bool.
+
+* TRUE iff client is not supplied or initial
+    DATA empty_client   TYPE abap_bool.
+
+
+    DATA: line       TYPE t_src.
+    DATA: where_tab  TYPE TABLE OF t_src. "dynamic SQL options
+    DATA: field_tab  TYPE TABLE OF t_src.
+
+    DATA: id_fields  TYPE STANDARD TABLE OF id_field. "list of id fields
+    DATA wa_id_field TYPE id_field.
+
+    DATA number_of_id_fields TYPE i.
+    DATA total_id_length     TYPE i.
+
+    DATA id_flag     TYPE abap_bool.
+
+    DATA number_of_in_fields TYPE i.
+
+    DATA: f    TYPE STANDARD TABLE OF x031l,
+          f_wa TYPE x031l.
+    DATA: tabname2 TYPE tabname.      " table name (internal copy)
+
+    DATA current_position TYPE i.
+
+    DATA: type_ref   TYPE REF TO cl_abap_typedescr,
+          tab_ref    TYPE REF TO cl_abap_tabledescr,
+          line_ref   TYPE REF TO cl_abap_structdescr,
+          fields_tab TYPE abap_compdescr_tab,
+          wa_fields  TYPE abap_compdescr.
+
+    DATA id_pointer TYPE i.
+    DATA last       TYPE abap_bool.
+    DATA str_a      TYPE string.
+    DATA: number_of_fields TYPE i.
+    DATA itemp1     TYPE i.
+    DATA itemp2     TYPE i.
+*
+* initialization
+*
+    REFRESH keytab.
+    CLEAR field_tab.
+    CLEAR where_tab.
+
+
+*
+* check if ID is absent or empty.
+*
+
+    IF id IS SUPPLIED  AND NOT ( id IS INITIAL ).
+      empty_id = abap_false.
+      string_id = id.
+      input_id_length = strlen( string_id ).
+    ELSE.
+      empty_id = abap_true.
+    ENDIF.
+
+*
+* check if area is absent or empty
+*
+
+    IF area IS SUPPLIED  AND NOT ( area IS INITIAL ).
+      empty_area = abap_false.
+    ELSE.
+      empty_area = abap_true.
+    ENDIF.
+
+*
+* check if client is absent or empty
+*
+
+    IF client IS SUPPLIED  AND NOT ( client IS INITIAL ).
+      empty_client = abap_false.
+    ELSE.
+      empty_client = abap_true.
+    ENDIF.
+
+*
+* check correct key
+*
+* exception if:
+* 1) no table is supplied
+* 2) no area is supplied but id is supplied
+*
+
+    IF tabname IS INITIAL
+       OR ( empty_area = abap_true AND empty_id = abap_false ).
+      RAISE EXCEPTION TYPE cx_sy_incorrect_key.
+    ENDIF.
+
+*
+* 3) client_specified is false but a client is supplied
+*
+    IF client_specified = abap_false
+       AND empty_client = abap_false.
+      RAISE EXCEPTION TYPE cx_sy_client.
+    ENDIF.
+
+*
+* 4) client_specified is true, generic_key is true,
+* but client, area, key are all missing
+*
+    IF client_specified = abap_true AND
+       empty_client = abap_true AND empty_area = abap_true
+       AND empty_id = abap_true AND generic_key = abap_true.
+      RAISE EXCEPTION TYPE cx_sy_generic_key.
+    ENDIF.
+
+*
+* fill the table of fields to be retrieved from the DB
+* and the table of id_fields.
+*
+
+*
+* a)initialization
+*
+    id_flag = abap_false.
+    current_position = 1.   " in CHAR
+    id_flag = abap_false.
+    number_of_in_fields = 0.
+
+
+*
+* b) get key-table description
+*
+    CALL METHOD cl_abap_tabledescr=>describe_by_data
+      EXPORTING
+        p_data      = keytab
+      RECEIVING
+        p_descr_ref = type_ref.
+    tab_ref ?= type_ref.
+    CALL METHOD tab_ref->get_table_line_type
+      RECEIVING
+        p_descr_ref = type_ref.
+    line_ref ?= type_ref.
+    fields_tab = line_ref->components.
+
+    LOOP AT fields_tab INTO wa_fields.
+      number_of_in_fields = number_of_in_fields + 1.
+    ENDLOOP.
+
+
+*
+* c) get id fields in the table 'tabname'
+*
+    number_of_id_fields = 0.
+*  IMPORT NAMETAB h f ID tabname. "obsolete
+    tabname2 = tabname.
+    CALL FUNCTION 'DD_GET_NAMETAB'
+      EXPORTING
+        status    = 'A'
+        tabname   = tabname2
+        get_all   = 'X'
+      TABLES
+        x031l_tab = f
+      EXCEPTIONS
+        not_found = 0
+        no_fields = 0
+        OTHERS    = 0.
+
+    IF with_user_header = abap_false.
+      number_of_fields = 0.
+      LOOP AT f INTO f_wa.
+        number_of_fields = number_of_fields + 1.
+
+        IF f_wa-fieldname = 'SRTF2'.
+* this is the last field (and does not belong to the key)
+          EXIT.
+        ENDIF.
+
+        IF number_of_fields > number_of_in_fields.
+*
+* exception: the supplied keytable does not have the right format
+*
+          RAISE EXCEPTION TYPE cx_sy_tabline_wrong_format.
+        ELSE.
+          READ TABLE fields_tab INDEX number_of_fields
+             INTO wa_fields.
+          IF wa_fields-length < f_wa-exlength.
+*
+* exception: keytable field(s) is too short
+*
+            RAISE EXCEPTION TYPE cx_sy_tabline_too_short.
+          ENDIF.
+        ENDIF.
+
+
+        line = f_wa-fieldname.
+        APPEND line TO field_tab. " add field name to list of fields
+
+        IF id_flag = abap_true.  " this is an id field
+          wa_id_field-position = current_position.
+          wa_id_field-name = f_wa-fieldname.
+          current_position = current_position +
+            f_wa-dblength2 / cl_abap_char_utilities=>charsize.
+          number_of_id_fields = number_of_id_fields + 1.
+
+          " add to table of id fields
+          INSERT wa_id_field INTO id_fields INDEX 1.
+        ENDIF.
+        IF  f_wa-fieldname = 'RELID'.
+          id_flag = abap_true.  " the id fields start with the next field
+        ENDIF.
+      ENDLOOP.
+    ELSE. " WITH_USER_HEADER = TRUE.
+      LOOP AT f INTO f_wa.
+        IF f_wa-fieldname = 'CLUSTR'. " last field
+          EXIT.
+        ENDIF.
+
+        IF f_wa-fieldname <> 'SRTF2'. " skip 'SRTF2'
+          line = f_wa-fieldname.
+          APPEND line TO field_tab.
+        ELSE.
+          id_flag = abap_false.       " no id fields after 'SRTF2'
+        ENDIF.
+
+        IF id_flag = abap_true.
+          wa_id_field-position = current_position.
+          wa_id_field-name = f_wa-fieldname.
+          current_position = current_position +
+          f_wa-dblength2 / cl_abap_char_utilities=>charsize.
+          number_of_id_fields = number_of_id_fields + 1.
+          IF number_of_id_fields > number_of_in_fields.
+*
+* exc'n: the supplied keytable does not have the right format
+*
+            RAISE EXCEPTION TYPE cx_sy_tabline_wrong_format.
+          ELSE.
+            READ TABLE fields_tab INDEX number_of_id_fields
+               INTO wa_fields.
+            IF wa_fields-length < f_wa-exlength.
+*
+* exception: keytable field(s) is too short
+*
+              RAISE EXCEPTION TYPE cx_sy_tabline_too_short.
+            ENDIF.
+          ENDIF.
+
+          INSERT wa_id_field INTO id_fields INDEX 1.
+        ENDIF.
+        IF  f_wa-fieldname = 'RELID'.
+          id_flag = abap_true.  " the id fields start with the next field
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    total_id_length = current_position - 1. "total length of the id fields
+
+*
+* check generic key
+*
+
+*
+* generic is set to false (regardless of user input)  if either
+* 1) no id is provided and the given area contains two characters,
+* 2) neither id nor area are provided and the given client
+*    contains 3 characters,
+* 3) only table name is provided, or
+* 4) the total length of the provided ids exactly matches
+*    the length of the id fields in the DB table
+* otherwise, the user input value of generic_key is used
+*
+    IF ( empty_id = abap_true AND area+1(1) <> '' )
+      OR ( empty_id = abap_true
+           AND empty_area = abap_true
+           AND client+2(1) <> '' )
+      OR ( empty_id = abap_true
+           AND empty_area = abap_true
+           AND empty_client = abap_true )
+      OR total_id_length = input_id_length.
+      generic_clean = abap_false.
+    ELSE.
+      generic_clean = generic_key.
+    ENDIF.
+
+
+*
+* fill the where condition
+*
+
+*
+* id fields
+*
+
+    id_pointer = input_id_length.
+    last = abap_true.
+
+*
+*  loop over the id fields of the DB table
+*
+    LOOP AT id_fields INTO wa_id_field.
+
+      IF wa_id_field-position > input_id_length.
+        CONTINUE. "no value for this field has been selected
+      ENDIF.
+
+      itemp1 = wa_id_field-position - 1.
+      itemp2 = id_pointer - wa_id_field-position + 1.
+      str_a = id+itemp1(itemp2).
+
+      IF last = abap_true AND generic_clean <> abap_false.
+*
+* if this is the last field and generic is true,
+* we must formulate the where condition as
+* a 'LIKE'-relation. This in turn means that
+* special characters must be escaped.
+*
+        REPLACE ALL OCCURRENCES OF '#' IN str_a WITH '##'.
+        REPLACE ALL OCCURRENCES OF '%' IN str_a WITH '#%'.
+        REPLACE ALL OCCURRENCES OF '_' IN str_a WITH '#_'.
+        CONCATENATE wa_id_field-name spc 'LIKE' spc ''''
+        str_a '%' '''' spc 'ESCAPE ''#''' spc 'AND' INTO str_a.
+        last = abap_false.
+      ELSE.
+*
+* in this case we can simply use a '=' condition.
+* No escape is necessary
+*
+        CONCATENATE wa_id_field-name spc '=' spc '''' str_a ''''
+        spc 'AND' INTO str_a.
+      ENDIF.
+
+      APPEND str_a TO where_tab.
+
+      id_pointer = itemp1.
+    ENDLOOP.
+
+*
+* area field
+*
+
+    IF empty_area = abap_false.
+      area_clean = area.
+      TRANSLATE area_clean TO UPPER CASE.
+
+*
+* (same logic as above)
+*
+      IF empty_id = abap_true
+        AND generic_clean <> abap_false.
+        REPLACE ALL OCCURRENCES OF '#' IN area_clean WITH '##'.
+        REPLACE ALL OCCURRENCES OF '%' IN area_clean WITH '#%'.
+        REPLACE ALL OCCURRENCES OF '_' IN area_clean WITH '#_'.
+        CONCATENATE 'RELID LIKE' spc '''' area_clean '%' ''''
+        spc 'ESCAPE ''#''' INTO line.
+      ELSE.
+        CONCATENATE 'RELID =' spc '''' area_clean '''' INTO line.
+      ENDIF.
+      APPEND line TO where_tab.
+    ENDIF.
+
+*
+* client field
+*
+
+    IF client_specified <> abap_false
+       AND ( empty_client = abap_false OR empty_area = abap_false ).
+      IF empty_area = abap_false.
+        line = 'AND'.
+        APPEND line TO where_tab.
+      ENDIF.
+      DATA(client_fieldname) = f[ 1 ]-fieldname.
+      IF generic_clean <> abap_false.
+        client_clean = client.
+        REPLACE ALL OCCURRENCES OF '#' IN client_clean WITH '##'.
+        REPLACE ALL OCCURRENCES OF '%' IN client_clean WITH '#%'.
+        REPLACE ALL OCCURRENCES OF '_' IN client_clean WITH '#_'.
+*        CONCATENATE 'MANDT LIKE' spc '''' client_clean '%' '''' " <=== BUG 1
+        CONCATENATE client_fieldname ' LIKE' spc '''' client_clean '%' '''' " <=== BUG 1
+        'ESCAPE ''#'''  INTO line.
+      ELSE.
+*        CONCATENATE 'MANDT =' spc '''' client '''' INTO line. " <=== BUG 1
+        CONCATENATE client_fieldname ' =' spc '''' client '''' INTO line. " <=== BUG 1
+      ENDIF.
+      APPEND line TO where_tab.
+    ENDIF.
+
+*
+* DB query
+*
+    IF client_specified <> abap_false.
+      SELECT (field_tab) FROM (tabname) CLIENT SPECIFIED
+      INTO TABLE keytab
+      WHERE (where_tab).
+    ELSE.
+      SELECT (field_tab) FROM (tabname)
+      INTO TABLE keytab
+      WHERE (where_tab).
+    ENDIF.
+
+  ENDMETHOD.
 
 
   METHOD export_all.
@@ -193,7 +733,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <table>    TYPE STANDARD TABLE.
 
 
-    DATA(properties) = describe_export_import_table( tabname ).
+    DATA(properties) = get_info( tabname ).
 
 
     DATA(level1) = 0.
@@ -273,7 +813,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     ENDLOOP.
 
     " XSTRING
-    IF properties-is_structure_751 = abap_false.
+    IF properties-is_structure_one_row = abap_false.
 
       CREATE DATA ref_table TYPE TABLE OF (tabname).
       ASSIGN ref_table->* TO <table>.
@@ -320,136 +860,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD import_all.
-
-    zcl_expimp_table=>import_from_database_2_xstring(
-      EXPORTING
-        client  = client
-        tabname = tabname
-        area    = area
-        id      = id
-        id_new  = id_new
-      IMPORTING
-        xstring = DATA(xstring)
-        wa      = wa ).
-
-    IF xstring IS INITIAL.
-      " Not found
-      RETURN.
-    ENDIF.
-
-    tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
-
-  ENDMETHOD.
-
-
-  METHOD import_from_database_2_xstring.
-
-    DATA:
-      ref_table TYPE REF TO data,
-      where     TYPE string,
-      length    TYPE i.
-    FIELD-SYMBOLS:
-      <id_field>       TYPE ty_id_field,
-      <id_new_field>   TYPE clike,
-      <table>          TYPE STANDARD TABLE,
-      <wa_fieldname>   TYPE any,
-      <line_bytes>     TYPE x,
-      <clustd>         TYPE any,
-      <first_line>     TYPE any,
-      <length2>        TYPE int2,
-      <length4>        TYPE i,
-      <database_field> TYPE any,
-      <wa_field>       TYPE any.
-
-    CLEAR: xstring,
-           wa.
-
-    DATA(properties) = describe_export_import_table( tabname ).
-
-    " Build WHERE
-    where = ''.
-    IF properties-client_fieldname IS NOT INITIAL.
-      where = |{ properties-client_fieldname } = '{ client }' AND |.
-    ENDIF.
-
-    where = |{ where }RELID = { cl_abap_dyn_prg=>quote( area ) }|.
-
-    " Fields part of the "ID" of the Export/Import Table.
-    LOOP AT properties-id_fields ASSIGNING <id_field>.
-      IF id_new IS NOT INITIAL.
-        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO <id_new_field>.
-        IF sy-subrc = 0.
-          where = |{ where } AND { <id_field>-fieldname } = { cl_abap_dyn_prg=>quote( <id_new_field> ) }|.
-        ENDIF.
-      ELSE.
-        DATA(len) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
-        IF len = 0.
-          EXIT.
-        ENDIF.
-        where = |{ where } AND { <id_field>-fieldname } = { cl_abap_dyn_prg=>quote( id+<id_field>-offset(<id_field>-length) ) }|.
-      ENDIF.
-    ENDLOOP.
-
-    " The following
-    " SELECT * FROM (table_name) CLIENT SPECIFIED
-    "   WHERE <client-field> = client
-    "     AND <area-field>   = area
-    "     AND <id-field1>    = <substring-1-of-id>
-    "     AND <id-field2>    = <substring-2-of-id>
-    "     AND ...
-    "   INTO TABLE <table>.
-    "   wa-field1 = <table>[ 1 ]-field1.
-    "   wa-field2 = <table>[ 1 ]-field2.
-    " (which is equivalent to
-    " IMPORT (all-fields) FROM DATABASE <table>(<area>) TO <wa> CLIENT <client> ID <id>
-    " )
-    CREATE DATA ref_table TYPE TABLE OF (tabname).
-    ASSIGN ref_table->* TO <table>.
-    SELECT * FROM (tabname) CLIENT SPECIFIED
-          INTO TABLE <table>
-          WHERE (where).
-    IF sy-subrc <> 0.
-      " EMPTY
-      RETURN.
-    ENDIF.
-
-    SORT <table> BY table_line.
-
-    " XSTRING
-    IF properties-is_structure_751 = abap_false.
-      CLEAR xstring.
-      LOOP AT <table> ASSIGNING <line_bytes> CASTING.
-        IF properties-clustr_length = 2.
-          ASSIGN <line_bytes>+properties-offset_clustr(2) TO <length2> CASTING.
-          CONCATENATE xstring <line_bytes>+properties-offset_clustd(<length2>) INTO xstring IN BYTE MODE.
-        ELSE.
-          ASSIGN <line_bytes>+properties-offset_clustr(4) TO <length4> CASTING.
-          CONCATENATE xstring <line_bytes>+properties-offset_clustd(<length4>) INTO xstring IN BYTE MODE.
-        ENDIF.
-      ENDLOOP.
-    ELSE.
-      ASSIGN <table>[ 1 ] TO <first_line>.
-      ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <first_line> TO <clustd>.
-      ASSERT sy-subrc = 0.
-      xstring = <clustd>.
-    ENDIF.
-
-    " WA
-    ASSIGN <table>[ 1 ] TO <first_line>.
-    LOOP AT properties-wa_fieldnames ASSIGNING <wa_fieldname>.
-      ASSIGN COMPONENT <wa_fieldname> OF STRUCTURE wa TO <wa_field>.
-      IF sy-subrc = 0.
-        ASSIGN COMPONENT <wa_fieldname> OF STRUCTURE <first_line> TO <database_field>.
-        ASSERT sy-subrc = 0.
-        <wa_field> = <database_field>.
-      ENDIF.
-    ENDLOOP.
-
-  ENDMETHOD.
-
-
-  METHOD describe_export_import_table.
+  METHOD get_info.
 
     DATA:
       area_index TYPE i,
@@ -503,16 +914,18 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             AND <ls_dd03l>-keyflag = 'X'
             AND <ls_dd03l>-datatype = 'CLNT'.
         clnt_position = field_position.
-        result-client_fieldname = abap_true.
+        info-client_fieldname = <ls_dd03l>-fieldname.
       ENDIF.
 
       CASE <ls_dd03l>-fieldname.
+
         WHEN 'RELID'.
           IF <ls_dd03l>-datatype <> 'CHAR'
                 AND <ls_dd03l>-leng <> 2.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           relid_position = field_position.
+
         WHEN 'SRTF2'.
           IF <ls_dd03l>-datatype <> 'INT1'
                 AND <ls_dd03l>-datatype <> 'INT2'
@@ -520,12 +933,14 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           srtf2_position = field_position.
+
         WHEN 'CLUSTR'.
           IF <ls_dd03l>-datatype <> 'INT2'.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           clustr_position = field_position.
           ASSIGN <ls_dd03l> TO FIELD-SYMBOL(<dd03l_clustr>).
+
         WHEN 'CLUSTD'.
           IF <ls_dd03l>-datatype <> 'LRAW' " LRAW required for Multiple Rows data clusters
                 AND <ls_dd03l>-datatype <> 'RSTR'. " RAWSTRING required for One Row data clusters
@@ -539,13 +954,13 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             AND field_position <> clnt_position
             AND field_position <> relid_position
             AND field_position <> srtf2_position.
-        CASE <ls_dd03l>-datatype.
-          WHEN 'CHAR' OR 'NUM' OR 'DATS' OR 'TIMS'.
+        CASE <ls_dd03l>-inttype.
+          WHEN 'C' OR 'N' OR 'D' OR 'T'.
             DATA(ls_id_field) = VALUE ty_id_field( ).
             ls_id_field-offset = id_offset.
             ls_id_field-length = <ls_dd03l>-leng.
             ls_id_field-fieldname = <ls_dd03l>-fieldname.
-            APPEND ls_id_field TO result-id_fields.
+            APPEND ls_id_field TO info-id_fields.
             ADD <ls_dd03l>-leng TO id_offset.
           WHEN OTHERS.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
@@ -556,19 +971,20 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       IF <ls_dd03l>-keyflag = ' '
             AND field_position <> clustr_position
             AND field_position <> clustd_position.
-        APPEND <ls_dd03l>-fieldname TO result-wa_fieldnames.
+        APPEND <ls_dd03l>-fieldname TO info-attr_fieldnames.
       ENDIF.
 
     ENDLOOP.
 
-    " The RELID field must be present, EITHER at first position OR right after the client if it's present
-    IF ( result-client_fieldname IS INITIAL AND relid_position <> 1 )
-        OR ( result-client_fieldname IS NOT INITIAL AND relid_position <> 2 ).
+    " The RELID field must be present, EITHER at first position
+    " OR, if the table is client-dependent, right after the client
+    IF ( info-client_fieldname IS INITIAL AND relid_position <> 1 )
+        OR ( info-client_fieldname IS NOT INITIAL AND relid_position <> 2 ).
       RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
     ENDIF.
 
     " There must be at least one ID field
-    IF lines( result-id_fields ) = 0.
+    IF lines( info-id_fields ) = 0.
       RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
     ENDIF.
 
@@ -591,11 +1007,12 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     IF srtf2_position <> 0
         AND clustr_position <> 0
         AND <dd03l_clustd>-inttype = 'X'. " VARC or LRAW
-      result-is_structure_751 = abap_false.
-    ELSEIF srtf2_position = 0
+      info-is_structure_one_row = abap_false.
+    ELSEIF sy-saprl >= '751'
+        AND srtf2_position = 0
         AND clustr_position = 0
         AND <dd03l_clustd>-rollname = 'INDX_CLUST_BLOB'.
-      result-is_structure_751 = abap_true.
+      info-is_structure_one_row = abap_true.
     ELSE.
       RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
     ENDIF.
@@ -609,14 +1026,163 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     IF clustr_position <> 0.
       ASSIGN COMPONENT 'CLUSTR' OF STRUCTURE <line> TO <clustr>.
       ASSERT sy-subrc = 0.
-      DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO result-offset_clustr IN BYTE MODE.
-      result-clustr_length = <dd03l_clustr>-intlen.
+      DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO info-offset_clustr IN BYTE MODE.
+      info-clustr_length = <dd03l_clustr>-intlen.
     ENDIF.
 
     ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <line> TO <clustd>.
     ASSERT sy-subrc = 0.
-    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustd> INTO result-offset_clustd IN BYTE MODE.
-    result-clustd_length = <dd03l_clustd>-intlen.
+    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustd> INTO info-offset_clustd IN BYTE MODE.
+    info-clustd_length = <dd03l_clustd>-intlen.
+
+  ENDMETHOD.
+
+
+  METHOD import_all.
+
+    zcl_expimp_table=>import_from_database_2_xstring(
+      EXPORTING
+        client  = client
+        tabname = tabname
+        area    = area
+        id      = id
+        id_new  = id_new
+      IMPORTING
+        xstring = DATA(xstring)
+        wa      = wa ).
+
+    IF xstring IS INITIAL.
+      " Not found
+      RETURN.
+    ENDIF.
+
+    tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
+
+  ENDMETHOD.
+
+
+  METHOD import_from_database_2_xstring.
+
+    DATA:
+      ref_table TYPE REF TO data,
+      where     TYPE string,
+      length    TYPE i.
+    FIELD-SYMBOLS:
+      <id_field>       TYPE ty_id_field,
+      <id_new_field>   TYPE clike,
+      <table>          TYPE STANDARD TABLE,
+      <wa_fieldname>   TYPE any,
+      <line_bytes>     TYPE x,
+      <clustd>         TYPE any,
+      <first_line>     TYPE any,
+      <length2>        TYPE int2,
+      <length4>        TYPE i,
+      <database_field> TYPE any,
+      <wa_field>       TYPE any.
+
+    CLEAR: xstring,
+           wa.
+
+    DATA(info) = get_info( tabname ).
+
+    where = _build_where(
+          client     = client
+          area       = area
+          id         = id
+          id_new       = id_new
+          info = info ).
+
+    " The following
+    " SELECT * FROM (table_name) CLIENT SPECIFIED
+    "   WHERE <client-field> = client
+    "     AND <area-field>   = area
+    "     AND <id-field1>    = <substring-1-of-id>
+    "     AND <id-field2>    = <substring-2-of-id>
+    "     AND ...
+    "   INTO TABLE <table>.
+    "   wa-field1 = <table>[ 1 ]-field1.
+    "   wa-field2 = <table>[ 1 ]-field2.
+    " (which is equivalent to
+    " IMPORT (all-fields) FROM DATABASE <table>(<area>) TO <wa> CLIENT <client> ID <id>
+    " )
+    CREATE DATA ref_table TYPE TABLE OF (tabname).
+    ASSIGN ref_table->* TO <table>.
+    SELECT * FROM (tabname) CLIENT SPECIFIED
+          INTO TABLE <table>
+          WHERE (where).
+    IF sy-subrc <> 0.
+      " EMPTY
+      RETURN.
+    ENDIF.
+
+    SORT <table> BY table_line.
+
+    " XSTRING
+    IF info-is_structure_one_row = abap_false.
+      CLEAR xstring.
+      LOOP AT <table> ASSIGNING <line_bytes> CASTING.
+        IF info-clustr_length = 2.
+          ASSIGN <line_bytes>+info-offset_clustr(2) TO <length2> CASTING.
+          CONCATENATE xstring <line_bytes>+info-offset_clustd(<length2>) INTO xstring IN BYTE MODE.
+        ELSE.
+          ASSIGN <line_bytes>+info-offset_clustr(4) TO <length4> CASTING.
+          CONCATENATE xstring <line_bytes>+info-offset_clustd(<length4>) INTO xstring IN BYTE MODE.
+        ENDIF.
+      ENDLOOP.
+    ELSE.
+      ASSIGN <table>[ 1 ] TO <first_line>.
+      ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <first_line> TO <clustd>.
+      ASSERT sy-subrc = 0.
+      xstring = <clustd>.
+    ENDIF.
+
+    " WA
+    wa = <table>[ 1 ].
+
+  ENDMETHOD.
+
+
+  METHOD is_valid_expimp_table.
+
+    TRY.
+        zcl_expimp_table=>get_info( tabname ).
+        result = abap_true.
+      CATCH zcx_expimp_table.
+        result = abap_false.
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD _build_where.
+
+    FIELD-SYMBOLS:
+      <id_field>     TYPE zcl_expimp_table=>ty_id_field,
+      <id_new_field> TYPE clike.
+
+    " Build WHERE
+    r_where = ''.
+    IF info-client_fieldname IS NOT INITIAL.
+      r_where = |{ info-client_fieldname } = '{ client }' AND |.
+    ENDIF.
+
+    r_where = |{ r_where }RELID = { cl_abap_dyn_prg=>quote( area ) }|.
+
+    " Fields part of the "ID" of the Export/Import Table.
+    LOOP AT info-id_fields ASSIGNING <id_field>.
+      IF id_new IS NOT INITIAL.
+        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO <id_new_field>.
+        IF sy-subrc = 0.
+          r_where = |{ r_where } AND { <id_field>-fieldname } = { cl_abap_dyn_prg=>quote( <id_new_field> ) }|.
+        ENDIF.
+      ELSE.
+        DATA(length) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
+        IF length = 0.
+          EXIT.
+        ENDIF.
+        r_where = |{ r_where } AND { <id_field>-fieldname } = {
+            cl_abap_dyn_prg=>quote( substring( val = id off = <id_field>-offset len = length ) ) }|.
+      ENDIF.
+    ENDLOOP.
 
   ENDMETHOD.
 
