@@ -11,7 +11,8 @@ CLASS zcx_expimp_table DEFINITION
       export_too_many_objects    TYPE sotr_conc VALUE '0800271CCEE91EDAA0C65754BBAD86C6',
       not_an_export_import_table TYPE sotr_conc VALUE '0800271CCEE91EDAA0C6028C47A7469A',
       export_data_buffer_error   TYPE sotr_conc VALUE '0800271CCEE91EDAA1823B6128B5DA40',
-      database_error             TYPE sotr_conc VALUE '0800271CCEE91EDAA1823C2A76631A40'.
+      database_error             TYPE sotr_conc VALUE '0800271CCEE91EDAA1823C2A76631A40',
+      import_format_error        TYPE sotr_conc VALUE '690BB8396F051547E10000000A11447B'.
   PROTECTED SECTION.
   PRIVATE SECTION.
 ENDCLASS.
@@ -33,6 +34,8 @@ CLASS ZCX_EXPIMP_TABLE IMPLEMENTATION.
         result = 'Error during export to data buffer'(004).
       WHEN database_error.
         result = 'Error during database operation'(005).
+      WHEN import_format_error.
+        result = 'Import format error'(006).
       WHEN OTHERS.
         super->get_text( ).
     ENDCASE.

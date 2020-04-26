@@ -12,6 +12,38 @@
     <FIXPT>X</FIXPT>
     <UNICODE>X</UNICODE>
    </VSEOCLASS>
+   <SOTR>
+    <item>
+     <HEADER>
+      <CONCEPT>690BB8396F051547E10000000A11447B</CONCEPT>
+      <CREA_LAN>D</CREA_LAN>
+      <TRALA_TYPE>1</TRALA_TYPE>
+      <OBJID_VEC>CA==</OBJID_VEC>
+     </HEADER>
+     <ENTRIES>
+      <SOTR_TEXT>
+       <CONCEPT>690BB8396F051547E10000000A11447B</CONCEPT>
+       <LANGU>D</LANGU>
+       <OBJECT>6A0BB8396F051547E10000000A11447B</OBJECT>
+       <LFD_NUM>0001</LFD_NUM>
+       <FLAG_CNTXT>X</FLAG_CNTXT>
+       <STATUS>R</STATUS>
+       <LENGTH>255</LENGTH>
+       <TEXT>Fehler im internen Datenformat.</TEXT>
+      </SOTR_TEXT>
+      <SOTR_TEXT>
+       <CONCEPT>690BB8396F051547E10000000A11447B</CONCEPT>
+       <LANGU>E</LANGU>
+       <OBJECT>3B8E97C51EDC1F9BE10000000A1145C3</OBJECT>
+       <LFD_NUM>0001</LFD_NUM>
+       <FLAG_CNTXT>X</FLAG_CNTXT>
+       <STATUS>R</STATUS>
+       <LENGTH>255</LENGTH>
+       <TEXT>Error in internal data format</TEXT>
+      </SOTR_TEXT>
+     </ENTRIES>
+    </item>
+   </SOTR>
   </asx:values>
  </asx:abap>
 </abapGit>

@@ -58,9 +58,10 @@ CLASS lcl_app IMPLEMENTATION.
             offset         = COND #( WHEN beyond = abap_true THEN 0 ELSE <id_field>-offset )
             length         = COND #( WHEN beyond = abap_true THEN 0
                                 ELSE nmin( val1 = strlen( id ) - offset val2 = <id_field>-length ) )
-            id_field_value = NEW string( id+offset(length) ) IN
+            "id_field_value = NEW string( id+offset(length) )
+            IN
         ( name  = <id_field>-fieldname
-          value = REF #( id_field_value ) ) ).
+          value = cond #( when length <> 0 then new string( id+offset(length) ) else new string( ) ) ) ).
     CALL TRANSFORMATION id
       SOURCE
         (generic)
@@ -133,6 +134,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     lcl_app=>ref_alv_line = VALUE #( ).
 
+    salv->get_functions( )->set_all( ).
     salv->display( ).
 
     SET HANDLER on_double_click FOR salv->get_event( ) ACTIVATION ''.
@@ -150,8 +152,6 @@ CLASS lcl_app IMPLEMENTATION.
     ref_alv_line = REF #( <alv_table>[ row ] ).
 
     salv->close_screen( ).
-*    cl_gui_cfw=>set_new_ok_code( '/12' ).
-*    cl_gui_cfw=>dispatch( ).
 
   ENDMETHOD.
 
@@ -164,7 +164,11 @@ SELECTION-SCREEN PUSHBUTTON /1(30) get_keys USER-COMMAND get_keys.
 PARAMETERS client TYPE symandt DEFAULT sy-mandt MODIF ID cli.
 PARAMETERS area TYPE relid.
 SELECTION-SCREEN PUSHBUTTON /1(30) enter_id USER-COMMAND enter_id.
-PARAMETERS id TYPE string.
+" Choosing type of ID field, either C255 or STRING, has an important impact
+" on DB_GET_KEYS which interprets ID as a generic key only if there are
+" no trailing spaces. I prefer to use type C so that generic key is
+" preferred (that automatically works as if there were never trailing spaces)
+PARAMETERS id TYPE c LENGTH 255.
 
 SELECTION-SCREEN BEGIN OF SCREEN 1001 AS WINDOW.
 PARAMETERS upper AS CHECKBOX DEFAULT 'X'.
@@ -317,7 +321,6 @@ AT SELECTION-SCREEN OUTPUT.
   ENDCASE.
 
 AT SELECTION-SCREEN.
-*  DATA: ref_to_keytab TYPE REF TO data.
   FIELD-SYMBOLS: <keytab> TYPE STANDARD TABLE.
   CASE sy-dynnr.
     WHEN 1000.
@@ -360,7 +363,6 @@ AT SELECTION-SCREEN.
           DATA(ref_alv_line) = lcl_app=>f4_key( CHANGING alv_table = <keytab> ).
           IF ref_alv_line IS BOUND.
             ASSIGN ref_alv_line->* TO FIELD-SYMBOL(<alv_line>).
-            DATA(id_string) = ||.
             DATA(offset) = 0.
             IF info-client_fieldname IS NOT INITIAL.
               ASSIGN COMPONENT 1 OF STRUCTURE <alv_line> TO FIELD-SYMBOL(<alv_field>).
@@ -373,6 +375,7 @@ AT SELECTION-SCREEN.
               area = <alv_field>.
               offset = 1.
             ENDIF.
+            DATA(id_string) = ||.
             LOOP AT info-id_fields REFERENCE INTO DATA(id_field).
               ASSIGN COMPONENT sy-tabix + offset OF STRUCTURE <alv_line> TO <alv_field>.
               id_string = id_string && |{ <alv_field> WIDTH = id_field->length }|.

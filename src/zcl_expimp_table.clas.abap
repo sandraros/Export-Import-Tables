@@ -96,7 +96,9 @@ CLASS zcl_expimp_table DEFINITION
              client_fieldname     TYPE fieldname,
              id_fields            TYPE STANDARD TABLE OF ty_id_field WITH EMPTY KEY,
              attr_fieldnames      TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY,
+             "! Byte offset of CLUSTR column (only if structure is multiple rows, zero otherwise)
              offset_clustr        TYPE i,
+             "! Number of bytes of CLUSTR column, 1, 2 or 4 (only if structure is multiple rows, zero otherwise)
              clustr_length        TYPE i,
              offset_clustd        TYPE i,
              clustd_length        TYPE i,
@@ -215,7 +217,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         ( LINES OF COND #( WHEN with_user_header = abap_true THEN VALUE #(
             FOR <fieldname> IN info-attr_fieldnames
             ( name = <fieldname>
-              type = CAST #( cl_abap_typedescr=>describe_by_data( sy-mandt ) ) ) ) ) ) ) ).
+              type = CAST #( cl_abap_typedescr=>describe_by_name( |{ tabname }-{ <fieldname> }| ) ) ) ) ) ) ) ).
 
     DATA(lo_table) = cl_abap_tabledescr=>create( p_line_type = lo_struct ).
 
@@ -226,18 +228,26 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 
   METHOD get_keys.
 
-    " There are 2 bugs in versions up to 7.52 (I don't know after 7.52)
+    " There are bugs in versions up to 7.52 at least (I don't know after 7.52)
     " Bug 1: standard code assumes client field is always named MANDT, but it may differ
     "        and in that case CX_SY_DYNAMIC_OSQL_SYNTAX occurs (but not handled -> CX_SY_NO_HANDLER)
-    " Bug 2: if WITH_USER_HEADER = 'X', standard code almost always triggers CX_SY_TABLINE_TOO_SHORT,
-    "        I don't do the correction because after the most simple correction, there are
-    "        many other issues. Anyway, I guess that WITH_USER_HEADER makes no sense in a
-    "        method used to GET KEYS, so no need to spend time on it.
+    " Bug 2: if WITH_USER_HEADER = 'X', standard code almost always triggers CX_SY_TABLINE_TOO_SHORT
+    " Bug 3: duplicate keys are returned, why not single ones? Solution -> use SELECT DISTINCT
+    "        instead of SELECT.
+    " Bug 4: WITH_USER_HEADER = 'X' and export/import table has structure "one row", CLUSTD is
+    "        required in KEYTAB; it should not.
+    " Bug 5: doesn't work at all for one row export/import tables because algorithm is based
+    "        on presence of SRTF2 column, which is only for multiple rows.
+    DATA(info) = get_info( tabname ).
     DATA(bugged) = COND abap_bool(
         WHEN sy-saprl > '752'
-            THEN abap_false
-        ELSE COND #( LET info = get_info( tabname ) IN WHEN info-client_fieldname <> 'MANDT'
-            THEN abap_true ) ).
+            THEN abap_false " Let be optimistic that SAP will correct the bugs in 753
+        ELSE COND #( WHEN with_user_header = abap_true " BUG 2 and BUG 4
+            THEN abap_true
+        ELSE COND #( WHEN info-client_fieldname <> 'MANDT' " BUG 1
+            THEN abap_true
+        ELSE COND #( WHEN info-is_structure_one_row = abap_true " BUG 5
+            THEN abap_true ) ) ) ).
     IF bugged = abap_false.
       cl_abap_expimp_utilities=>db_get_keys(
         EXPORTING
@@ -250,6 +260,8 @@ CLASS zcl_expimp_table IMPLEMENTATION.
           client_specified        = client_specified
         IMPORTING
           keytab                  = keytab ).
+      SORT keytab BY table_line. " <=== BUG 3
+      DELETE ADJACENT DUPLICATES FROM keytab. " <=== BUG 3
       RETURN.
     ENDIF.
 
@@ -451,6 +463,9 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 * this is the last field (and does not belong to the key)
           EXIT.
         ENDIF.
+        IF lines( id_fields ) = lines( info-id_fields ). " <=== BUG 5
+          EXIT.                                          " <=== BUG 5
+        ENDIF.                                           " <=== BUG 5
 
         IF number_of_fields > number_of_in_fields.
 *
@@ -487,17 +502,24 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         ENDIF.
       ENDLOOP.
     ELSE. " WITH_USER_HEADER = TRUE.
+      number_of_fields = 0. " <=== BUG 2
       LOOP AT f INTO f_wa.
-        IF f_wa-fieldname = 'CLUSTR'. " last field
+*        IF f_wa-fieldname = 'CLUSTR'.  " last field " <=== BUG 4
+        IF f_wa-fieldname = 'CLUSTR'  " last field " <=== BUG 4
+        OR f_wa-fieldname = 'CLUSTD'. " last field for one row export/import tables " <=== BUG 4
           EXIT.
         ENDIF.
 
         IF f_wa-fieldname <> 'SRTF2'. " skip 'SRTF2'
           line = f_wa-fieldname.
           APPEND line TO field_tab.
+          number_of_fields = number_of_fields + 1. " <=== BUG 2
         ELSE.
           id_flag = abap_false.       " no id fields after 'SRTF2'
         ENDIF.
+        IF lines( id_fields ) = lines( info-id_fields ). " <=== BUG 5
+          id_flag = abap_false.                          " <=== BUG 5
+        ENDIF.                                           " <=== BUG 5
 
         IF id_flag = abap_true.
           wa_id_field-position = current_position.
@@ -511,7 +533,8 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 *
             RAISE EXCEPTION TYPE cx_sy_tabline_wrong_format.
           ELSE.
-            READ TABLE fields_tab INDEX number_of_id_fields
+*            READ TABLE fields_tab INDEX number_of_id_fields " <=== BUG 2
+            READ TABLE fields_tab INDEX number_of_fields " <=== BUG 2
                INTO wa_fields.
             IF wa_fields-length < f_wa-exlength.
 *
@@ -644,7 +667,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         line = 'AND'.
         APPEND line TO where_tab.
       ENDIF.
-      DATA(client_fieldname) = f[ 1 ]-fieldname.
+      DATA(client_fieldname) = f[ 1 ]-fieldname. " <=== BUG 1
       IF generic_clean <> abap_false.
         client_clean = client.
         REPLACE ALL OCCURRENCES OF '#' IN client_clean WITH '##'.
@@ -664,11 +687,13 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 * DB query
 *
     IF client_specified <> abap_false.
-      SELECT (field_tab) FROM (tabname) CLIENT SPECIFIED
+*      SELECT (field_tab) FROM (tabname) CLIENT SPECIFIED " <=== BUG 3
+      SELECT DISTINCT (field_tab) FROM (tabname) CLIENT SPECIFIED " <=== BUG 3
       INTO TABLE keytab
       WHERE (where_tab).
     ELSE.
-      SELECT (field_tab) FROM (tabname)
+*      SELECT (field_tab) FROM (tabname) " <=== BUG 3
+      SELECT DISTINCT (field_tab) FROM (tabname) " <=== BUG 3
       INTO TABLE keytab
       WHERE (where_tab).
     ENDIF.
@@ -1056,7 +1081,27 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
+    TRY.
+        cl_abap_expimp_utilities=>dbuf_get_directory(
+          EXPORTING
+            dbuf = xstring
+          IMPORTING
+            directory = DATA(directory) ).
+    TRY.
+        cl_abap_expimp_utilities=>dbuf_convert(
+          EXPORTING
+            dbuf_in  = xstring
+            targ_rel = '752'
+          IMPORTING
+            dbuf_out = data(xstring2) ).
+          CATCH cx_parameter_invalid_range.
+ASSERT 1 = 1.
+endtry.
+        tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
+
+      CATCH cx_sy_import_format_error INTO DATA(lx).
+        RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING previous = lx.
+    ENDTRY.
 
   ENDMETHOD.
 
@@ -1086,11 +1131,11 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     DATA(info) = get_info( tabname ).
 
     where = _build_where(
-          client     = client
-          area       = area
-          id         = id
-          id_new       = id_new
-          info = info ).
+          client = client
+          area   = area
+          id     = id
+          id_new = id_new
+          info   = info ).
 
     " The following
     " SELECT * FROM (table_name) CLIENT SPECIFIED
@@ -1176,7 +1221,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         ENDIF.
       ELSE.
         DATA(length) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
-        IF length = 0.
+        IF length <= 0.
           EXIT.
         ENDIF.
         r_where = |{ r_where } AND { <id_field>-fieldname } = {

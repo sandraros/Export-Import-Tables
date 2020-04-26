@@ -5,7 +5,7 @@ CLASS zcl_expimp_table_apack DEFINITION
 
   PUBLIC SECTION.
 
-    INTERFACES zif_apack_manifest.
+    INTERFACES if_apack_manifest.
 
     METHODS: constructor.
 
@@ -18,7 +18,7 @@ ENDCLASS.
 CLASS zcl_expimp_table_apack IMPLEMENTATION.
 
   METHOD constructor.
-    zif_apack_manifest~descriptor = VALUE #(
+    if_apack_manifest~descriptor = VALUE #(
         group_id     = 'github.com/sandraros'
         artifact_id  = 'Export-Import-Tables'
         version      = '0.2'
