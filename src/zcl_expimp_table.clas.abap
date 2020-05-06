@@ -78,7 +78,7 @@ CLASS zcl_expimp_table DEFINITION
 
     "! <p class="shorttext synchronized" lang="en"></p>
     "!
-    "! @parameter tabname | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
     "! @parameter result | <p class="shorttext synchronized" lang="en"></p>
     CLASS-METHODS is_valid_expimp_table
       IMPORTING
@@ -95,6 +95,10 @@ CLASS zcl_expimp_table DEFINITION
              is_structure_one_row TYPE abap_bool,
              client_fieldname     TYPE fieldname,
              id_fields            TYPE STANDARD TABLE OF ty_id_field WITH EMPTY KEY,
+             area_offset          TYPE i,
+             id_offset            TYPE i,
+             total_key_length     TYPE i,
+             id_length            TYPE i,
              attr_fieldnames      TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY,
              "! Byte offset of CLUSTR column (only if structure is multiple rows, zero otherwise)
              offset_clustr        TYPE i,
@@ -307,7 +311,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     DATA wa_id_field TYPE id_field.
 
     DATA number_of_id_fields TYPE i.
-    DATA total_id_length     TYPE i.
+*    DATA total_id_length     TYPE i.
 
     DATA id_flag     TYPE abap_bool.
 
@@ -552,7 +556,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       ENDLOOP.
     ENDIF.
 
-    total_id_length = current_position - 1. "total length of the id fields
+*    total_id_length = current_position - 1. "total length of the id fields
 
 *
 * check generic key
@@ -569,13 +573,13 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 * otherwise, the user input value of generic_key is used
 *
     IF ( empty_id = abap_true AND area+1(1) <> '' )
-      OR ( empty_id = abap_true
-           AND empty_area = abap_true
-           AND client+2(1) <> '' )
-      OR ( empty_id = abap_true
-           AND empty_area = abap_true
-           AND empty_client = abap_true )
-      OR total_id_length = input_id_length.
+          OR ( empty_id = abap_true
+               AND empty_area = abap_true
+               AND client+2(1) <> '' )
+          OR ( empty_id = abap_true
+               AND empty_area = abap_true
+               AND empty_client = abap_true )
+          OR info-id_length = input_id_length.
       generic_clean = abap_false.
     ELSE.
       generic_clean = generic_key.
@@ -921,12 +925,14 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     SORT lt_dd03l BY position.
 
     DATA(number_of_key_fields) = 0.
-    DATA(id_offset) = 0.
     DATA(clnt_position) = 0.
     DATA(relid_position) = 0.
     DATA(srtf2_position) = 0.
     DATA(clustr_position) = 0.
     DATA(clustd_position) = 0.
+
+    info-area_offset = 0.
+    info-id_offset = 2.
 
     LOOP AT lt_dd03l ASSIGNING FIELD-SYMBOL(<ls_dd03l>).
       DATA(field_position) = sy-tabix.
@@ -940,6 +946,9 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             AND <ls_dd03l>-datatype = 'CLNT'.
         clnt_position = field_position.
         info-client_fieldname = <ls_dd03l>-fieldname.
+        ADD 3 TO info-total_key_length.
+        ADD 3 TO info-area_offset.
+        ADD 3 TO info-id_offset.
       ENDIF.
 
       CASE <ls_dd03l>-fieldname.
@@ -950,6 +959,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
           ENDIF.
           relid_position = field_position.
+          ADD 2 TO info-total_key_length.
 
         WHEN 'SRTF2'.
           IF <ls_dd03l>-datatype <> 'INT1'
@@ -982,11 +992,12 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         CASE <ls_dd03l>-inttype.
           WHEN 'C' OR 'N' OR 'D' OR 'T'.
             DATA(ls_id_field) = VALUE ty_id_field( ).
-            ls_id_field-offset = id_offset.
+            ls_id_field-offset = info-id_length.
             ls_id_field-length = <ls_dd03l>-leng.
             ls_id_field-fieldname = <ls_dd03l>-fieldname.
             APPEND ls_id_field TO info-id_fields.
-            ADD <ls_dd03l>-leng TO id_offset.
+            ADD <ls_dd03l>-leng TO info-id_length.
+            ADD <ls_dd03l>-leng TO info-total_key_length.
           WHEN OTHERS.
             RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>not_an_export_import_table.
         ENDCASE.
@@ -1087,16 +1098,16 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             dbuf = xstring
           IMPORTING
             directory = DATA(directory) ).
-    TRY.
-        cl_abap_expimp_utilities=>dbuf_convert(
-          EXPORTING
-            dbuf_in  = xstring
-            targ_rel = '752'
-          IMPORTING
-            dbuf_out = data(xstring2) ).
+        TRY.
+            cl_abap_expimp_utilities=>dbuf_convert(
+              EXPORTING
+                dbuf_in  = xstring
+                targ_rel = '752'
+              IMPORTING
+                dbuf_out = DATA(xstring2) ).
           CATCH cx_parameter_invalid_range.
-ASSERT 1 = 1.
-endtry.
+            ASSERT 1 = 1.
+        ENDTRY.
         tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
 
       CATCH cx_sy_import_format_error INTO DATA(lx).
@@ -1201,6 +1212,7 @@ endtry.
   METHOD _build_where.
 
     FIELD-SYMBOLS:
+*      <id>           TYPE c,
       <id_field>     TYPE zcl_expimp_table=>ty_id_field,
       <id_new_field> TYPE clike.
 
@@ -1217,15 +1229,19 @@ endtry.
       IF id_new IS NOT INITIAL.
         ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO <id_new_field>.
         IF sy-subrc = 0.
-          r_where = |{ r_where } AND { <id_field>-fieldname } = { cl_abap_dyn_prg=>quote( <id_new_field> ) }|.
+          r_where = |{ r_where } AND { <id_field>-fieldname } = {
+              cl_abap_dyn_prg=>quote( <id_new_field> ) }|.
         ENDIF.
       ELSE.
         DATA(length) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
         IF length <= 0.
           EXIT.
         ENDIF.
+        " Don't use "substring" because this function doesn't support character structures
+        " (ID could be a structure like FUNCTDIR for the export/import table EUFUNC).
         r_where = |{ r_where } AND { <id_field>-fieldname } = {
-            cl_abap_dyn_prg=>quote( substring( val = id off = <id_field>-offset len = length ) ) }|.
+            cl_abap_dyn_prg=>quote( id+<id_field>-offset(length) ) }|.
+*            cl_abap_dyn_prg=>quote( substring( val = id off = <id_field>-offset len = length ) ) }|.
       ENDIF.
     ENDLOOP.
 
