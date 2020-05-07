@@ -7,6 +7,7 @@ CLASS zcx_expimp_table DEFINITION
   PUBLIC SECTION.
     METHODS get_text REDEFINITION.
     CONSTANTS:
+      id_not_found               TYPE sotr_conc VALUE '3330271CCEE91EDAA0C09443BE2F1451',
       table_does_not_exist       TYPE sotr_conc VALUE '0800271CCEE91EDAA0C0942F145143BE',
       export_too_many_objects    TYPE sotr_conc VALUE '0800271CCEE91EDAA0C65754BBAD86C6',
       not_an_export_import_table TYPE sotr_conc VALUE '0800271CCEE91EDAA0C6028C47A7469A',
@@ -19,13 +20,15 @@ ENDCLASS.
 
 
 
-CLASS ZCX_EXPIMP_TABLE IMPLEMENTATION.
+CLASS zcx_expimp_table IMPLEMENTATION.
 
 
   METHOD get_text.
     CASE textid.
       WHEN table_does_not_exist.
         result = 'Table does not exist'(001).
+      WHEN id_not_found.
+        result = 'ID not found'(007).
       WHEN export_too_many_objects.
         result = 'Export of 1000 data objects maximum'(002).
       WHEN not_an_export_import_table.

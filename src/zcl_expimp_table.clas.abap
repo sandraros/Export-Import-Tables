@@ -1088,8 +1088,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         wa      = wa ).
 
     IF xstring IS INITIAL.
-      " Not found
-      RETURN.
+      RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>id_not_found.
     ENDIF.
 
     TRY.
@@ -1212,7 +1211,6 @@ CLASS zcl_expimp_table IMPLEMENTATION.
   METHOD _build_where.
 
     FIELD-SYMBOLS:
-*      <id>           TYPE c,
       <id_field>     TYPE zcl_expimp_table=>ty_id_field,
       <id_new_field> TYPE clike.
 
@@ -1235,13 +1233,13 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       ELSE.
         DATA(length) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
         IF length <= 0.
-          EXIT.
+          r_where = |{ r_where } AND { <id_field>-fieldname } = ' '|.
+        ELSE.
+          " Don't use "substring" because this function doesn't support character structures
+          " (ID could be a structure like FUNCTDIR for the export/import table EUFUNC).
+          r_where = |{ r_where } AND { <id_field>-fieldname } = {
+              cl_abap_dyn_prg=>quote( id+<id_field>-offset(length) ) }|.
         ENDIF.
-        " Don't use "substring" because this function doesn't support character structures
-        " (ID could be a structure like FUNCTDIR for the export/import table EUFUNC).
-        r_where = |{ r_where } AND { <id_field>-fieldname } = {
-            cl_abap_dyn_prg=>quote( id+<id_field>-offset(length) ) }|.
-*            cl_abap_dyn_prg=>quote( substring( val = id off = <id_field>-offset len = length ) ) }|.
       ENDIF.
     ENDLOOP.
 
