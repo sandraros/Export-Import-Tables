@@ -23,6 +23,7 @@ CLASS lcl_app DEFINITION.
         area       TYPE relid
         id         TYPE clike OPTIONAL
         id_new     TYPE any OPTIONAL
+        show_hex   TYPE abap_bool
       RETURNING
         VALUE(xml) TYPE string
       RAISING
@@ -61,7 +62,7 @@ CLASS lcl_app IMPLEMENTATION.
             "id_field_value = NEW string( id+offset(length) )
             IN
         ( name  = <id_field>-fieldname
-          value = cond #( when length <> 0 then new string( id+offset(length) ) else new string( ) ) ) ).
+          value = COND #( WHEN length <> 0 THEN NEW string( id+offset(length) ) ELSE NEW string( ) ) ) ).
     CALL TRANSFORMATION id
       SOURCE
         (generic)
@@ -74,15 +75,33 @@ CLASS lcl_app IMPLEMENTATION.
     CREATE DATA ref_wa TYPE (tabname).
     ASSIGN ref_wa->* TO FIELD-SYMBOL(<wa>).
 
-    zcl_expimp_table=>import_all(
-      EXPORTING
-        client   = client
-        tabname  = tabname
-        area     = area
-        id       = id
-      IMPORTING
-        wa       = <wa>
-        tab_cpar = DATA(tab_cpar) ).
+    IF show_hex = abap_true.
+
+      zcl_expimp_table=>import_as_xstring(
+        EXPORTING
+          client   = client
+          tabname  = tabname
+          area     = area
+          id       = id
+        IMPORTING
+          xstring  = DATA(xstring)
+          wa       = <wa> ).
+
+      xml = xml && |<dataObjects>{ xml_data_objects }</dataObjects>|.
+
+    ELSE.
+
+      zcl_expimp_table=>import_all(
+        EXPORTING
+          client   = client
+          tabname  = tabname
+          area     = area
+          id       = id
+        IMPORTING
+          wa       = <wa>
+          tab_cpar = DATA(tab_cpar) ).
+
+    ENDIF.
 
     IF info-attr_fieldnames IS NOT INITIAL.
       generic = VALUE #( ).
@@ -101,20 +120,30 @@ CLASS lcl_app IMPLEMENTATION.
         OPTIONS
           xml_header = 'no'.
       xml = xml && |<attributes>{ xml_attr_fields }</attributes>|.
+
     ENDIF.
 
-    generic = VALUE abap_trans_srcbind_tab(
-        FOR <cpar> IN tab_cpar
-        ( name  = <cpar>-name
-          value = <cpar>-dref ) ).
-    CALL TRANSFORMATION id
-      SOURCE
-        (generic)
-      RESULT
-        XML xml_data_objects
-      OPTIONS
-        xml_header = 'no'.
-    xml = xml && |<dataObjects>{ xml_data_objects }</dataObjects>|.
+    IF show_hex = abap_true.
+
+      xml = xml && |<dataCluster>{ xstring }</dataCluster>|.
+
+    ELSE.
+
+      generic = VALUE abap_trans_srcbind_tab(
+          FOR <cpar> IN tab_cpar
+          ( name  = <cpar>-name
+            value = <cpar>-dref ) ).
+      CALL TRANSFORMATION id
+        SOURCE
+          (generic)
+        RESULT
+          XML xml_data_objects
+        OPTIONS
+          xml_header = 'no'.
+
+      xml = xml && |<dataObjects>{ xml_data_objects }</dataObjects>|.
+
+    ENDIF.
 
     xml = xml && |</exportImportData>|.
 
@@ -159,6 +188,7 @@ ENDCLASS.
 
 TABLES sscrfields.
 
+PARAMETERS show_hex AS CHECKBOX DEFAULT 'X'.
 PARAMETERS tabname TYPE tabname.
 SELECTION-SCREEN PUSHBUTTON /1(30) get_keys USER-COMMAND get_keys.
 PARAMETERS client TYPE symandt DEFAULT sy-mandt MODIF ID cli.
@@ -329,9 +359,7 @@ AT SELECTION-SCREEN.
           TRY.
               DATA(info) = zcl_expimp_table=>get_info( tabname ).
               DATA(client_specified) = xsdbool( info-client_fieldname IS NOT INITIAL ).
-              DATA(ref_to_keytab) = zcl_expimp_table=>create_keytab_for_get_keys(
-                  tabname          = tabname
-                  client_specified = client_specified ).
+              DATA(ref_to_keytab) = zcl_expimp_table=>create_keytab_for_get_keys( tabname = tabname ).
             CATCH zcx_expimp_table.
               MESSAGE 'not a valid Export/Import Table'(001) TYPE 'E'.
           ENDTRY.
@@ -428,9 +456,10 @@ AT SELECTION-SCREEN.
 START-OF-SELECTION.
 
   DATA(xml) = NEW lcl_app( )->main(
-      client  = client
-      tabname = tabname
-      area    = area
-      id      = id ).
+      client   = client
+      tabname  = tabname
+      area     = area
+      id       = id
+      show_hex = show_hex ).
 
   cl_demo_output=>display_xml( xml ).
