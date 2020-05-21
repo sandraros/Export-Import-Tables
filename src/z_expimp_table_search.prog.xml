@@ -14,8 +14,8 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Show contents of any Export/Import Table</ENTRY>
-     <LENGTH>40</LENGTH>
+     <ENTRY>Search in headers of Export/Import Tables</ENTRY>
+     <LENGTH>41</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

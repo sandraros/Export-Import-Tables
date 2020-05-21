@@ -92,6 +92,11 @@ CLASS zcl_expimp_table DEFINITION
              length    TYPE i,
            END OF ty_id_field,
            BEGIN OF ty_expimp_table_info,
+             tabname              TYPE tabname,
+             "! <ul>
+             "! <li>false: table with multiple rows (has got columns SRTF2 and CLUSTR, CLUSTD is of type RAW/X)</li>
+             "! <li>true: table with one row (hasN'T got columns SRTF2 and CLUSTR, CLUSTD is of type RAWSTRING/XSTRING)</li>
+             "! </ul>
              is_structure_one_row TYPE abap_bool,
              "! Name of client column - Empty if no client column
              client_fieldname     TYPE fieldname,
@@ -453,6 +458,8 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <clustd>      TYPE any,
       <line>        TYPE any.
 
+    info = VALUE #( tabname = tabname ).
+
     " Table must be active and transparent
     SELECT COUNT(*) FROM dd02l
       WHERE tabname  = @tabname
@@ -614,8 +621,9 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     ASSIGN COMPONENT 1 OF STRUCTURE <line> TO <first_field>.
 
     ASSIGN COMPONENT 'CLUSTR' OF STRUCTURE <line> TO <clustr>.
-    ASSERT sy-subrc = 0.
-    DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO info-offset_clustr IN BYTE MODE.
+    IF sy-subrc = 0.
+      DESCRIBE DISTANCE BETWEEN <first_field> AND <clustr> INTO info-offset_clustr IN BYTE MODE.
+    ENDIF.
 
     ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <line> TO <clustd>.
     ASSERT sy-subrc = 0.
@@ -1196,6 +1204,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    " Sort by SRTF2 ascending
     SORT <table> BY table_line.
 
     " XSTRING
@@ -1203,7 +1212,11 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       CLEAR xstring.
       LOOP AT <table> ASSIGNING <line_bytes> CASTING.
         ASSIGN <line_bytes>+info-offset_clustr(2) TO <length2> CASTING.
-        CONCATENATE xstring <line_bytes>+info-offset_clustd(<length2>) INTO xstring IN BYTE MODE.
+        IF <length2> <> 0.
+          CONCATENATE xstring <line_bytes>+info-offset_clustd(<length2>) INTO xstring IN BYTE MODE.
+        ELSE.
+          ASSERT 1 = 1. " Weird - That happened in table COVREF in 7.52 SP 0 developer edition.
+        ENDIF.
       ENDLOOP.
     ELSE.
       ASSIGN <table>[ 1 ] TO <first_line>.
@@ -1212,8 +1225,12 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       xstring = <clustd>.
     ENDIF.
 
-    " WA
-    wa = <table>[ 1 ].
+    " WA (+ avoid errors in case parameter WA is not passed/is not a structure)
+    DATA(rtti_wa) = cl_abap_typedescr=>describe_by_data( wa ).
+    IF rtti_wa->kind = rtti_wa->kind_struct.
+      ASSIGN <table>[ 1 ] TO <first_line>.
+      wa = CORRESPONDING #( <first_line> ).
+    ENDIF.
 
   ENDMETHOD.
 
@@ -1250,7 +1267,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO <id_new_field>.
         IF sy-subrc = 0.
           r_where = |{ r_where } AND { <id_field>-fieldname } = {
-              cl_abap_dyn_prg=>quote( <id_new_field> ) }|.
+              cl_abap_dyn_prg=>quote( CONV string( <id_new_field> ) ) }|.
         ENDIF.
       ELSE.
         DATA(length) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
@@ -1260,7 +1277,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
           " Don't use "substring" because this function doesn't support character structures
           " (ID could be a structure like FUNCTDIR for the export/import table EUFUNC).
           r_where = |{ r_where } AND { <id_field>-fieldname } = {
-              cl_abap_dyn_prg=>quote( id+<id_field>-offset(length) ) }|.
+              cl_abap_dyn_prg=>quote( CONV string( id+<id_field>-offset(length) ) ) }|.
         ENDIF.
       ENDIF.
     ENDLOOP.
