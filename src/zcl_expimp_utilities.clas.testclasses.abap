@@ -15,11 +15,15 @@ CLASS ltc_main DEFINITION
     METHODS primitive_i FOR TESTING RAISING cx_static_check.
     METHODS primitive_f FOR TESTING RAISING cx_static_check.
     METHODS primitive_string FOR TESTING RAISING cx_static_check.
-    METHODS itab FOR TESTING RAISING cx_static_check.
+    METHODS itab_empty FOR TESTING RAISING cx_static_check.
+    METHODS itab_one_line FOR TESTING RAISING cx_static_check.
+    METHODS itab_two_lines FOR TESTING RAISING cx_static_check.
+    METHODS iso_8859_1 FOR TESTING RAISING cx_static_check.
+    METHODS version_03 FOR TESTING RAISING cx_static_check.
 
     METHODS import_from_database.
     METHODS compare.
-    METHODS compare2 IMPORTING partab2 type tab_cpar.
+    METHODS compare2 IMPORTING partab2 TYPE tab_cpar.
 
     DATA blob TYPE xstring.
 ENDCLASS.
@@ -40,7 +44,7 @@ CLASS ltc_main IMPLEMENTATION.
     EXPORT structure-variable = struct TO DATA BUFFER blob.
 
     compare2( VALUE #(
-        ( name = 'STRUCTURE-VARIABLE' dref = ref #( struct ) ) ) ).
+        ( name = 'STRUCTURE-VARIABLE' dref = REF #( struct ) ) ) ).
 
   ENDMETHOD.
 
@@ -96,7 +100,37 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD itab.
+  METHOD itab_empty.
+
+    DATA: BEGIN OF line,
+            aaa TYPE c LENGTH 5,
+            bbb TYPE i,
+          END OF line,
+          itab LIKE TABLE OF line.
+
+    itab = VALUE #( ).
+    EXPORT the-itab = itab TO DATA BUFFER blob.
+
+    compare( ).
+
+  ENDMETHOD.
+
+  METHOD itab_one_line.
+
+    DATA: BEGIN OF line,
+            aaa TYPE c LENGTH 5,
+            bbb TYPE i,
+          END OF line,
+          itab LIKE TABLE OF line.
+
+    itab = VALUE #( ( aaa = |hello| bbb = 8 ) ).
+    EXPORT the-itab = itab TO DATA BUFFER blob.
+
+    compare( ).
+
+  ENDMETHOD.
+
+  METHOD itab_two_lines.
 
     DATA: BEGIN OF line,
             aaa TYPE c LENGTH 5,
@@ -148,14 +182,16 @@ CLASS ltc_main IMPLEMENTATION.
   METHOD compare.
 
     TRY.
-        data(partab2) = cl_abap_expimp_utilities=>dbuf_import_create_data( blob ).
+        DATA(partab2) = cl_abap_expimp_utilities=>dbuf_import_create_data( blob ).
       CATCH cx_sy_import_format_error INTO DATA(lx1).
-        assert 1 = 1. "handle exception
+        ASSERT 1 = 1. "handle exception
     ENDTRY.
 
     TRY.
         DATA(partab) = NEW zcl_expimp_utilities( )->dbuf_import_create_data( CHANGING dbuf = blob ).
       CATCH cx_root INTO DATA(lx2).
+      data(b) = 0.
+      b = b + 1.
         cl_abap_unit_assert=>fail( msg = 'error during custom IMPORT' ).
     ENDTRY.
 
@@ -176,6 +212,8 @@ CLASS ltc_main IMPLEMENTATION.
 
   METHOD compare2.
 
+      data(b) = 0.
+      b = b + 3.
     TRY.
         DATA(partab) = NEW zcl_expimp_utilities( )->dbuf_import_create_data( CHANGING dbuf = blob ).
       CATCH cx_root INTO DATA(lx2).
@@ -197,13 +235,41 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
+  METHOD version_03.
+    DATA: BEGIN OF vari,
+            a TYPE i,
+          END OF vari,
+          BEGIN OF varivdat,
+            b TYPE decfloat16,
+            c TYPE decfloat34,
+            d TYPE int8,
+          END OF varivdat.
+    vari = VALUE #( a = 8 ).
+    data(B) = 0. b = b + 1.
+    variVDAT = VALUE #( b = 8 ).
+    blob = 'FF03010101020000313130300000000003000060004106255F56415249AA000008AA080004AA000001AA080004AA000001AA00001EAA000001AA000001AA080004AA000001AA00001EAA000001AA000001'
+        && '0300001400250A255F5641524956444154AA000008AA000001AA000002AA080004AA08000401000001000D0450524F54BB4601000001000D0446554E43BB5304'.
+    compare2( VALUE #(
+        ( name = 'VARI'     dref = REF #( vari ) )
+        ( name = 'VARIVDAT' dref = REF #( varivdat ) ) ) ).
+  ENDMETHOD.
+
+  METHOD iso_8859_1.
+
+    " P_ACT_ID = 'SLSCN_COLLECT_DATA' (40C)
+    blob = 'FF0602010102800031313030000000000100000000002800000000080000000000000000000000000000000000000000505F4143545F4944BC00000028534C53434E5F434F4C4C4543545F4441544120202020202020202020202020202020202020202020BD04'.
+
+    compare( ).
+
+  ENDMETHOD.
+
   METHOD primitive_c.
 
     DATA aa TYPE c LENGTH 2 VALUE 'AB'.
     EXPORT character-variable = aa TO DATA BUFFER blob.
-
+data(b) = 0.
     compare( ).
-
+b = b + 1.
   ENDMETHOD.
 
   METHOD primitive_i.

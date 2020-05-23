@@ -173,7 +173,11 @@ CLASS lcl_app IMPLEMENTATION.
           IF info-is_structure_one_row = abap_false.
             ASSIGN <line>+info-id_offset(info-id_length) TO <id> CASTING.
           ELSE.
-            " there is a XSTRING, get rid of it
+            " that's a export/Import table with one-row format, which means
+            " that CLUSTD is a RAWSTRING/XSTRING column, subfield offset cannot
+            " be used on such structure, so transfer fields to a structure
+            " which doesn't have the XSTRING field, and then subfield offset
+            " can be used.
             <key> = CORRESPONDING #( <line> ).
             ASSIGN <key>+info-id_offset(info-id_length) TO <id> CASTING.
           ENDIF.

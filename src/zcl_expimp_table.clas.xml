@@ -29,7 +29,7 @@
      <CLSNAME>ZCL_EXPIMP_TABLE</CLSNAME>
      <CMPNAME>IMPORT_ALL</CMPNAME>
      <LANGU>E</LANGU>
-     <DESCRIPT>Read all data objects</DESCRIPT>
+     <DESCRIPT>Read all data objects of a data cluster</DESCRIPT>
     </SEOCOMPOTX>
    </DESCRIPTIONS>
   </asx:values>

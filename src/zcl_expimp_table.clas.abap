@@ -10,82 +10,6 @@ CLASS zcl_expimp_table DEFINITION
 
   PUBLIC SECTION.
 
-    "! Advantages of the method IMPORT_ALL compared to the classic IMPORT ... FROM DATABASE ...:<br/>
-    "! <ul>
-    "! <li>Indicate the table name and the area dynamically</li>
-    "! <li>Read all the data objects of the data cluster, no need of
-    "! indicating the types and names of data objects to read.</li>
-    "! </ul>
-    "! Example:<br/>
-    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
-    "! DATA(id_wa) = VALUE eufunc( gruppe = 'SCAL' name = 'DATE_GET_WEEK' nummer = nummer ).<br/>
-    "! zcl_expimp_table=>import_all(<br/>
-    "! &nbsp;&nbsp;&nbsp;EXPORTING client = '100' table_name = 'EUFUNC' area = 'FL'<br/>
-    "! &nbsp;&nbsp;&nbsp;IMPORTING tab_cpar = DATA(tab_cpar)<br/>
-    "! &nbsp;&nbsp;&nbsp;CHANGING  id_wa = id_wa.<br/>
-    "! DATA(dref) = tab_cpar[ name = '%_IDATE' ]-dref.<br/>
-    "! DATA(date1) = CAST d( dref )->*. " Here the developer knows that %_IDATE is of type D.<br/>
-    "! <br/>
-    "! is equivalent to:<br/>
-    "! <br/>
-    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
-    "! DATA(id) = VALUE functdir( area = 'SCAL' progid = 'DATE_GET_WEEK' dataid = nummer ).<br/>
-    "! <br/>
-    "! IMPORT %_idate = date1 FROM DATABASE eufunc(fl) ID id TO wa.<br/>
-    "! <br/>
-    "! Conversion options (ACCEPTING, IGNORING, etc.) are currently not possible.
-    "! <p class="shorttext synchronized" lang="en">Read all data objects</p>
-    "!
-    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
-    CLASS-METHODS import_all
-      IMPORTING
-        client   TYPE mandt DEFAULT sy-mandt
-        tabname  TYPE tabname
-        area     TYPE relid
-        id       TYPE clike OPTIONAL
-        id_new   TYPE any OPTIONAL
-      EXPORTING
-        wa       TYPE any
-        tab_cpar TYPE tab_cpar
-      RAISING
-        zcx_expimp_table.
-
-    "! <p class="shorttext synchronized" lang="en">Write all data objects (replace all)</p>
-    "!
-    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter id | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter id_new | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter WA | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter compression | <p class="shorttext synchronized" lang="en"></p>
-    CLASS-METHODS export_all
-      IMPORTING
-        client      TYPE mandt DEFAULT sy-mandt
-        tabname     TYPE tabname
-        area        TYPE relid
-        id          TYPE clike OPTIONAL
-        id_new      TYPE any OPTIONAL
-        wa          TYPE any
-        tab_cpar    TYPE tab_cpar
-        compression TYPE abap_bool DEFAULT abap_true
-      RAISING
-        zcx_expimp_table.
-
-    "! <p class="shorttext synchronized" lang="en"></p>
-    "!
-    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
-    "! @parameter result | <p class="shorttext synchronized" lang="en"></p>
-    CLASS-METHODS is_valid_expimp_table
-      IMPORTING
-        tabname       TYPE tabname
-      RETURNING
-        VALUE(result) TYPE abap_bool.
-
     TYPES: BEGIN OF ty_id_field,
              fieldname TYPE fieldname,
              offset    TYPE i,
@@ -117,6 +41,96 @@ CLASS zcl_expimp_table DEFINITION
              clustd_length        TYPE i,
            END OF ty_expimp_table_info.
 
+    "! The advantage of the method IMPORT_ALL compared to the classic IMPORT ... FROM DATABASE ..., is that you may:<br/>
+    "! <ul>
+    "! <li>Indicate the table name and the area dynamically</li>
+    "! <li>Read all the data objects of the data cluster, no need of
+    "! indicating the types and names of data objects to read.</li>
+    "! </ul>
+    "! Example:<br/>
+    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
+    "! DATA(id_wa) = VALUE eufunc( gruppe = 'SCAL' name = 'DATE_GET_WEEK' nummer = nummer ).<br/>
+    "! zcl_expimp_table=>import_all(<br/>
+    "! &nbsp;&nbsp;&nbsp;EXPORTING client = '100' table_name = 'EUFUNC' area = 'FL'<br/>
+    "! &nbsp;&nbsp;&nbsp;IMPORTING tab_cpar = DATA(tab_cpar)<br/>
+    "! &nbsp;&nbsp;&nbsp;CHANGING  id_wa = id_wa.<br/>
+    "! DATA(dref) = tab_cpar[ name = '%_IDATE' ]-dref.<br/>
+    "! DATA(date1) = CAST d( dref )->*. " Here the developer knows that %_IDATE is of type D.<br/>
+    "! <br/>
+    "! is equivalent to:<br/>
+    "! <br/>
+    "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
+    "! DATA(id) = VALUE functdir( area = 'SCAL' progid = 'DATE_GET_WEEK' dataid = nummer ).<br/>
+    "! <br/>
+    "! IMPORT %_idate = date1 FROM DATABASE eufunc(fl) ID id TO wa.<br/>
+    "! <br/>
+    "! Conversion options (ACCEPTING, IGNORING, etc.) are currently not possible.
+    "! <p class="shorttext synchronized" lang="en">Read all data objects of a data cluster</p>
+    "!
+    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter ID | <p class="shorttext synchronized" lang="en"></p>
+    "!  | Key of the data cluster in the database table, which must be the concatenation of
+    "!  | all key fields after the column RELID (except SRTF2).
+    "! @parameter id_new | <p class="shorttext synchronized" lang="en"></p>
+    "!  | Instead of using ID, you may find easier to use ID_NEW which may be a
+    "!  | structure with columns of same name as key fields of the export/import table,
+    "!  | for instance it may be a structure defined like the export/import table.
+    "! @parameter key | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter WA | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising zcx_expimp_table | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS import_all
+      IMPORTING
+        client   TYPE mandt DEFAULT sy-mandt
+        tabname  TYPE tabname
+        area     TYPE relid OPTIONAL
+        id       TYPE clike OPTIONAL
+        id_new   TYPE any OPTIONAL
+        key      TYPE any OPTIONAL
+      EXPORTING
+        wa       TYPE any
+        tab_cpar TYPE tab_cpar
+      RAISING
+        zcx_expimp_table.
+
+    "! <p class="shorttext synchronized" lang="en">Write all data objects (replace all)</p>
+    "!
+    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id_new | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter key | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter WA | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter tab_cpar | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter compression | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising zcx_expimp_table | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS export_all
+      IMPORTING
+        client      TYPE mandt DEFAULT sy-mandt
+        tabname     TYPE tabname
+        area        TYPE relid OPTIONAL
+        id          TYPE clike OPTIONAL
+        id_new      TYPE any OPTIONAL
+        key         TYPE any OPTIONAL
+        wa          TYPE any
+        tab_cpar    TYPE tab_cpar
+        compression TYPE abap_bool DEFAULT abap_true
+      RAISING
+        zcx_expimp_table.
+
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter result | <p class="shorttext synchronized" lang="en"></p>
+    CLASS-METHODS is_valid_expimp_table
+      IMPORTING
+        tabname       TYPE tabname
+      RETURNING
+        VALUE(result) TYPE abap_bool.
+
     "! <p class="shorttext synchronized" lang="en"></p>
     "!
     "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
@@ -142,13 +156,11 @@ CLASS zcl_expimp_table DEFINITION
     "!
     "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
     "! @parameter with_user_header | <p class="shorttext synchronized" lang="en"></p>
-*    "! @parameter client_specified | <p class="shorttext synchronized" lang="en"></p>
     "! @parameter ref_to_KEYtab | <p class="shorttext synchronized" lang="en"></p>
     CLASS-METHODS create_keytab_for_get_keys
       IMPORTING
         tabname              TYPE tabname
         with_user_header     TYPE abap_bool DEFAULT abap_false
-*        client_specified     TYPE abap_bool DEFAULT abap_false
       RETURNING
         VALUE(ref_to_keytab) TYPE REF TO data
       RAISING
@@ -203,13 +215,25 @@ CLASS zcl_expimp_table DEFINITION
         cx_sy_tabline_too_short
         cx_sy_incorrect_key .
 
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter client | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter TABNAME | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter area | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter id_new | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter key | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter XSTRING | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter WA | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising zcx_expimp_table | <p class="shorttext synchronized" lang="en"></p>
     CLASS-METHODS import_as_xstring
       IMPORTING
-        client  TYPE mandt
+        client  TYPE mandt DEFAULT sy-mandt
         tabname TYPE tabname
-        area    TYPE relid
+        area    TYPE relid OPTIONAL
         id      TYPE clike OPTIONAL
         id_new  TYPE any OPTIONAL
+        key     TYPE any OPTIONAL
       EXPORTING
         xstring TYPE xstring
         wa      TYPE any
@@ -221,10 +245,12 @@ CLASS zcl_expimp_table DEFINITION
 
     CLASS-METHODS _build_where
       IMPORTING
+        tabname        TYPE tabname
         client         TYPE mandt
         area           TYPE relid
         id             TYPE clike
         id_new         TYPE any
+        key            TYPE any OPTIONAL
         info           TYPE zcl_expimp_table=>ty_expimp_table_info
       RETURNING
         VALUE(r_where) TYPE string.
@@ -366,38 +392,48 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     CREATE DATA ref_line TYPE (tabname).
     ASSIGN ref_line->* TO FIELD-SYMBOL(<line>).
 
-    " CLIENT
-    IF properties-client_fieldname IS NOT INITIAL.
-      ASSIGN COMPONENT properties-client_fieldname OF STRUCTURE <line> TO FIELD-SYMBOL(<client>).
-      ASSERT sy-subrc = 0.
-      <client> = client.
-    ENDIF.
+    IF key IS NOT INITIAL.
+      <line> = CORRESPONDING #( key ).
+    ELSE.
 
-    " AREA
-    ASSIGN COMPONENT 'RELID' OF STRUCTURE <line> TO FIELD-SYMBOL(<relid>).
-    ASSERT sy-subrc = 0.
-    <relid> = area.
-
-    " ID fields
-    LOOP AT properties-id_fields ASSIGNING <id_field>.
-
-      ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE <line> TO FIELD-SYMBOL(<database_field>).
-      ASSERT sy-subrc = 0.
-
-      IF id_new IS NOT INITIAL.
-        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO FIELD-SYMBOL(<id_new_field>).
-        IF sy-subrc = 0.
-          <database_field> = <id_new_field>.
-        ENDIF.
-      ELSE.
-        DATA(len) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
-        IF len = 0.
-          EXIT.
-        ENDIF.
-        <database_field> = id+<id_field>-offset(<id_field>-length).
+      " CLIENT
+      IF properties-client_fieldname IS NOT INITIAL.
+        ASSIGN COMPONENT properties-client_fieldname OF STRUCTURE <line> TO FIELD-SYMBOL(<client>).
+        ASSERT sy-subrc = 0.
+        <client> = client.
       ENDIF.
 
-    ENDLOOP.
+      " AREA
+      ASSIGN COMPONENT 'RELID' OF STRUCTURE <line> TO FIELD-SYMBOL(<relid>).
+      ASSERT sy-subrc = 0.
+      <relid> = area.
+
+      " ID fields
+      LOOP AT properties-id_fields ASSIGNING <id_field>.
+
+        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE <line> TO FIELD-SYMBOL(<database_field>).
+        ASSERT sy-subrc = 0.
+
+        IF id_new IS NOT INITIAL.
+          ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO FIELD-SYMBOL(<id_new_field>).
+          IF sy-subrc = 0.
+            <database_field> = <id_new_field>.
+          ENDIF.
+        ELSE.
+          DATA(len) = nmin( val1 = <id_field>-length val2 = strlen( id ) - <id_field>-offset ).
+          IF len = 0.
+            EXIT.
+          ENDIF.
+          <database_field> = id+<id_field>-offset(<id_field>-length).
+        ENDIF.
+
+      ENDLOOP.
+
+    ENDIF.
+
+    IF wa IS NOT INITIAL.
+      <line> = CORRESPONDING #( BASE ( <line> ) wa ).
+    ENDIF.
 
     " XSTRING
     IF properties-is_structure_one_row = abap_false.
@@ -1117,6 +1153,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
         area    = area
         id      = id
         id_new  = id_new
+        key     = key
       IMPORTING
         xstring = DATA(xstring)
         wa      = wa ).
@@ -1169,17 +1206,19 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <database_field> TYPE any,
       <wa_field>       TYPE any.
 
-    CLEAR: xstring,
-           wa.
+    xstring = VALUE #( ).
+    wa = CONV #( `` ).
 
     DATA(info) = get_info( tabname ).
 
     where = _build_where(
-          client = client
-          area   = area
-          id     = id
-          id_new = id_new
-          info   = info ).
+          tabname = tabname
+          client  = client
+          area    = area
+          id      = id
+          id_new  = id_new
+          key     = key
+          info    = info ).
 
     " The following
     " SELECT * FROM (table_name) CLIENT SPECIFIED
@@ -1249,21 +1288,40 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 
   METHOD _build_where.
 
+    DATA:
+            dref_table_line TYPE REF TO data.
     FIELD-SYMBOLS:
+      <table_line>   TYPE any,
+      <client>       TYPE mandt,
+      <area>         TYPE relid,
       <id_field>     TYPE zcl_expimp_table=>ty_id_field,
       <id_new_field> TYPE clike.
+
+    IF key IS NOT INITIAL.
+      CREATE DATA dref_table_line TYPE (tabname).
+      ASSIGN dref_table_line->* TO <table_line>.
+      <table_line> = CORRESPONDING #( key ).
+      ASSIGN COMPONENT info-client_fieldname OF STRUCTURE <table_line> TO <client>.
+      ASSIGN COMPONENT 'RELID' OF STRUCTURE <table_line> TO <area>.
+    ENDIF.
 
     " Build WHERE
     r_where = ''.
     IF info-client_fieldname IS NOT INITIAL.
-      r_where = |{ info-client_fieldname } = '{ client }' AND |.
+      r_where = |{ info-client_fieldname } = '{ COND #( WHEN key IS NOT INITIAL THEN <client> ELSE client ) }' AND |.
     ENDIF.
 
-    r_where = |{ r_where }RELID = { cl_abap_dyn_prg=>quote( area ) }|.
+    r_where = |{ r_where }RELID = { cl_abap_dyn_prg=>quote( COND #( WHEN key IS NOT INITIAL THEN <area> ELSE area ) ) }|.
 
     " Fields part of the "ID" of the Export/Import Table.
     LOOP AT info-id_fields ASSIGNING <id_field>.
-      IF id_new IS NOT INITIAL.
+      IF key IS NOT INITIAL.
+        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE <table_line> TO <id_new_field>.
+        IF sy-subrc = 0.
+          r_where = |{ r_where } AND { <id_field>-fieldname } = {
+              cl_abap_dyn_prg=>quote( CONV string( <id_new_field> ) ) }|.
+        ENDIF.
+      ELSEIF id_new IS NOT INITIAL.
         ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE id_new TO <id_new_field>.
         IF sy-subrc = 0.
           r_where = |{ r_where } AND { <id_field>-fieldname } = {
@@ -1283,4 +1341,6 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.
+
+
 ENDCLASS.

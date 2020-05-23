@@ -1,6 +1,5 @@
 "! <p class="shorttext synchronized" lang="en">Utilities</p>
 "! TODO:<ul>
-"! <li>Try to instantiate CONV for portions of DBUF so that to not double the memory requirement.</li>
 "! <li></li>
 "! </ul>
 CLASS zcl_expimp_utilities DEFINITION
@@ -9,6 +8,25 @@ CLASS zcl_expimp_utilities DEFINITION
   CREATE PUBLIC .
 
   PUBLIC SECTION.
+
+    "! Method like CL_ABAP_EXPIMP_UTILITIES=>DBUF_IMPORT_CREATE_DATA
+    "! (which does not support all kinds of data buffers).
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter DBUF | <p class="shorttext synchronized" lang="en"></p>
+    "! @parameter PARTAB | <p class="shorttext synchronized" lang="en"></p>
+    "! @raising zcx_expimp_table | <p class="shorttext synchronized" lang="en"></p>
+    METHODS dbuf_import_create_data
+      CHANGING
+        dbuf          TYPE xstring
+      RETURNING
+        VALUE(partab) TYPE tab_cpar
+      RAISING
+        zcx_expimp_table.
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+
     "==========================================================
     "
     "             code below taken from RSINDX00
@@ -33,12 +51,12 @@ CLASS zcl_expimp_utilities DEFINITION
     "! </ul>
     TYPES ty_version TYPE x LENGTH 1.
     CONSTANTS: BEGIN OF c_version,
-                 unicode TYPE ty_version VALUE '06',
-                 nu_5    TYPE ty_version VALUE '05',
-                 nu_4    TYPE ty_version VALUE '04',
-                 nu_3    TYPE ty_version VALUE '03',
-                 nu_2    TYPE ty_version VALUE '02',
-                 nu_1    TYPE ty_version VALUE '01',
+                 v06 TYPE ty_version VALUE '06',
+                 v05 TYPE ty_version VALUE '05',
+                 v04 TYPE ty_version VALUE '04',
+                 v03 TYPE ty_version VALUE '03',
+                 v02 TYPE ty_version VALUE '02',
+                 v01 TYPE ty_version VALUE '01',
                END OF c_version.
 
     "! <ul>
@@ -157,6 +175,10 @@ CLASS zcl_expimp_utilities DEFINITION
                  int8       TYPE ty_ityp VALUE '1B',
                END OF c_ityp.
 
+    "! <ul>
+    "! <li>01 : primitive</li>
+    "! <li>02 : flat structure</li>
+    "! </ul>
     TYPES ty_object_id TYPE x LENGTH 1.
     CONSTANTS: BEGIN OF c_object_id,
                  primitive      TYPE ty_object_id VALUE '01',
@@ -173,7 +195,7 @@ CLASS zcl_expimp_utilities DEFINITION
       "! Object header
       BEGIN OF ty_object_header,
         "! Object header before release 3.1 (version 01 to 03)
-        BEGIN OF v00_30f,
+        BEGIN OF v01_03,
           "! Field type category
           id   TYPE ty_object_id,
           "! Field type
@@ -186,9 +208,9 @@ CLASS zcl_expimp_utilities DEFINITION
           next TYPE x LENGTH 2,
           "! Length of object name in number of characters
           nlen TYPE x1,
-        END OF v00_30f,
+        END OF v01_03,
         "! Object header for release 3.1 to 4.6 (version 04 to 05)
-        BEGIN OF v31_46,
+        BEGIN OF v04_05,
           "! Field type category
           id    TYPE ty_object_id,
           "! Field type
@@ -201,7 +223,7 @@ CLASS zcl_expimp_utilities DEFINITION
           nlen  TYPE x1,
           "! Type identifier (check info)
           typid TYPE x LENGTH 8,
-        END OF v31_46,
+        END OF v04_05,
         "! Object header for release 6.10 and higher (UNICODE) (version 06)
         BEGIN OF uni,
           "! Field type category
@@ -325,8 +347,10 @@ CLASS zcl_expimp_utilities DEFINITION
 
     CONSTANTS:
       BEGIN OF c_dv_id,
+        "! Whole length of Data Description
         single TYPE ty_dd_id VALUE 'BB',
         BEGIN OF interval,
+          "! Spans several fields
           start TYPE ty_dd_id VALUE 'BC',
           end   TYPE ty_dd_id VALUE 'BD',
         END OF interval,
@@ -343,23 +367,6 @@ CLASS zcl_expimp_utilities DEFINITION
           end   TYPE ty_dd_id VALUE 'CD',
         END OF boxed_component,
       END OF c_dv_id.
-
-
-
-    "! Method like CL_ABAP_EXPIMP_UTILITIES=>DBUF_IMPORT_CREATE_DATA
-    "! (which does not support all kinds of data buffers).
-    METHODS dbuf_import_create_data
-      CHANGING
-        dbuf          TYPE xstring
-      RETURNING
-        VALUE(partab) TYPE tab_cpar
-      RAISING
-        cx_static_check
-        cx_dynamic_check.
-*        zcx_expimp_table.
-
-  PROTECTED SECTION.
-  PRIVATE SECTION.
 
     TYPES:
       BEGIN OF ty_dd,
@@ -380,10 +387,16 @@ CLASS zcl_expimp_utilities DEFINITION
         leng       TYPE i,
         components TYPE REF TO data, "abap_component_tab,
       END OF ty_dd2,
-      ty_dd2_lines TYPE STANDARD TABLE OF ty_dd2 WITH EMPTY KEY.
+      ty_dd2_lines TYPE STANDARD TABLE OF ty_dd2 WITH EMPTY KEY,
+      BEGIN OF ty_dv_stack_line,
+        id  TYPE ty_dv_id,
+        off TYPE i,
+        len TYPE i,
+      END OF ty_dv_stack_line,
+      ty_dv_stack TYPE STANDARD TABLE OF ty_dv_stack_line WITH EMPTY KEY.
 
 
-    METHODS create_simple_element
+    METHODS create_data_primitive
       IMPORTING
         type        TYPE x1
         leng        TYPE i
@@ -403,7 +416,7 @@ CLASS zcl_expimp_utilities DEFINITION
       EXPORTING
         data TYPE any.
 
-    METHODS read_blob
+    METHODS read_blob_struct
       EXPORTING
         data TYPE any.
 
@@ -415,16 +428,6 @@ CLASS zcl_expimp_utilities DEFINITION
         off TYPE i
       RAISING
         zcx_expimp_table.
-
-*    "! OBSOLETE -> read_data_object2
-*    METHODS read_data_object
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
 
     METHODS read_data_primitive
       IMPORTING
@@ -479,10 +482,6 @@ CLASS zcl_expimp_utilities DEFINITION
       RAISING
         zcx_expimp_table.
 
-    METHODS terminate_data_value
-      RAISING
-        zcx_expimp_table.
-
     METHODS assert_blob_curr_byte_and_skip
       IMPORTING
         expected_byte TYPE ty_byte
@@ -495,11 +494,30 @@ CLASS zcl_expimp_utilities DEFINITION
       RAISING
         zcx_expimp_table.
 
-    METHODS dummy.
+    METHODS create_data_object
+      IMPORTING
+        dd2         TYPE ty_dd2
+      RETURNING
+        VALUE(rtti) TYPE REF TO cl_abap_typedescr
+      RAISING
+        zcx_expimp_table.
+
+    METHODS create_data_structure
+      IMPORTING
+        dd2  TYPE ty_dd2
+      RETURNING
+        VALUE(rtti) TYPE REF TO cl_abap_typedescr
+      RAISING
+        zcx_expimp_table.
+    METHODS create_data_table
+      IMPORTING
+        dd2         TYPE ty_dd2
+      RETURNING
+        VALUE(rtti) TYPE REF TO cl_abap_typedescr
+      RAISING
+        zcx_expimp_table.
 
     DATA:
-*      "! DBUF
-*      blob    TYPE xstring,
       "! DBUF reader (which converts from bytes to characters if needed)
       conv    TYPE REF TO cl_abap_conv_in_ce,
       "! Version
@@ -528,7 +546,7 @@ CLASS zcl_expimp_utilities DEFINITION
           "! Index current Data Description while parsing Data Values
           dd_line  TYPE ty_dd,
           dd_index TYPE i,
-          id       TYPE x LENGTH 1,
+          id       TYPE ty_dv_id,
           dd_off   TYPE i,
           len      TYPE i,
         END OF dv,
@@ -556,7 +574,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
     DATA: transport_header_x TYPE x LENGTH 16.
     transport_header_x = dbuf(16).
     conv = cl_abap_conv_in_ce=>create( encoding = '1100' input = transport_header_x ).
-    read_blob( IMPORTING data = transport_header ).
+    read_blob_struct( IMPORTING data = transport_header ).
 
     version = transport_header-version.
     DATA(sap_codepage) = CONV cpcodepage( cl_abap_codepage=>convert_from(
@@ -635,6 +653,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
         ENDIF.
       ENDDO.
 
+
       CLEAR blob.
 
       CALL 'AB_IMPORT_DECOMPRESS'
@@ -662,22 +681,31 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
               comp_num TYPE i,
             END OF ty_dv,
             ty_dvs TYPE STANDARD TABLE OF ty_dv WITH EMPTY KEY.
-    DATA: object_header TYPE ty_object_header-v31_46.
+    DATA: object_header_v04_05 TYPE ty_object_header-v04_05,
+          object_header_v01_03 TYPE ty_object_header-v01_03.
 
 
     "=====================
     "  Data Object general type and name
     "=====================
     CASE version.
-      WHEN '06'.
-        read_blob( IMPORTING data = current-object-header_uni ).
-      WHEN OTHERS.
-        read_blob( IMPORTING data = object_header ).
+      WHEN c_version-v06.
+        read_blob_struct( IMPORTING data = current-object-header_uni ).
+      WHEN c_version-v04
+        OR c_version-v05.
+        read_blob_struct( IMPORTING data = object_header_v04_05 ).
         current-object-header_uni = VALUE #(
-            BASE object_header
-            leng = CONV i( object_header-leng )
-            next = CONV i( object_header-next )
-            nlen = CONV i( object_header-nlen ) ).
+            BASE object_header_v04_05
+            leng = CONV i( object_header_v04_05-leng )
+            next = CONV i( object_header_v04_05-next )
+            nlen = CONV i( object_header_v04_05-nlen ) ).
+      WHEN OTHERS.
+        read_blob_struct( IMPORTING data = object_header_v01_03 ).
+        current-object-header_uni = VALUE #(
+            BASE object_header_v01_03
+            leng = CONV i( object_header_v01_03-leng )
+            next = CONV i( object_header_v01_03-next )
+            nlen = CONV i( object_header_v01_03-nlen ) ).
     ENDCASE.
     conv->read(
         EXPORTING n = CONV #( current-object-header_uni-nlen )
@@ -702,7 +730,9 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
     IF lines( lines2 ) <> 1.
       RAISE EXCEPTION TYPE zcx_expimp_table.
     ENDIF.
-    current-dd-line2  = lines2[ 1 ].
+    current-dd-line2 = lines2[ 1 ].
+
+    current-dd-rtti ?= create_data_object( current-dd-line2 ).
 
     DATA(dv) = VALUE ty_dv( rtti = current-dd-rtti ).
     CREATE DATA dv-dref TYPE HANDLE current-dd-rtti.
@@ -718,15 +748,17 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
     "=====================
     DATA(dvs) = VALUE ty_dvs( ).
 
-    current-dv = VALUE #( id = blob_curr_byte( ) ).
-
+    data(current_byte) = blob_curr_byte( ).
+if current_byte between 'B0' AND 'CF'.
+    current-dv = VALUE #( id = current_byte ).
     read_data_object2(
         EXPORTING
             dd2 = current-dd-line2
         IMPORTING
             dv  = <dv_field> ).
-
-    terminate_data_value( ).
+else.
+" other value could be the next Data Description
+endif.
 
   ENDMETHOD.
 
@@ -749,13 +781,13 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
       DELETE lines USING KEY loop_key.
 
-      DATA(dd_id_end) = SWITCH ty_dd_id( dd_line2-id
+      DATA(up_to_2) = SWITCH ty_dd_id( dd_line2-id
         WHEN c_dd_id-structure_include-start THEN c_dd_id-structure_include-end
         WHEN c_dd_id-boxed_component-start   THEN c_dd_id-boxed_component-end
         WHEN c_dd_id-structure-start         THEN c_dd_id-structure-end
         WHEN c_dd_id-table-start             THEN c_dd_id-table-end ).
 
-      IF dd_id_end IS NOT INITIAL.
+      IF up_to_2 IS NOT INITIAL.
 
         CREATE DATA dd_line2-components TYPE ty_dd2_lines.
         ASSIGN dd_line2-components->* TO <dd2_lines>.
@@ -775,7 +807,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
         normalize_data_description(
           EXPORTING
-              up_to  = dd_id_end
+              up_to  = up_to_2
           IMPORTING
               lines2 = <dd2_lines>
           CHANGING
@@ -785,6 +817,18 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       APPEND dd_line2 TO lines2.
 
     ENDLOOP.
+
+    IF lines( lines2 ) > 1.
+      CASE version.
+        WHEN c_version-v01
+          OR c_version-v02
+          OR c_version-v03.
+          lines2 = VALUE #(
+                LET save_lines2 = lines2 IN
+                ( id         = c_dd_id-structure-start
+                  components = NEW ty_dd2_lines( save_lines2 ) ) ).
+      ENDCASE.
+    ENDIF.
 
   ENDMETHOD.
 
@@ -820,15 +864,15 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     " Read the next Data Description block
     CASE version.
-      WHEN '06'.
-        read_blob( IMPORTING data = data_description_uni ).
+      WHEN c_version-v06.
+        read_blob_struct( IMPORTING data = data_description_uni ).
         dd = VALUE #(
             id   = data_description_uni-id
             type = data_description_uni-type
             leng = data_description_uni-flen
             decs = data_description_uni-decs ).
       WHEN OTHERS.
-        read_blob( IMPORTING data = data_description ).
+        read_blob_struct( IMPORTING data = data_description ).
         dd = VALUE #(
             id   = data_description-id
             type = data_description-type
@@ -838,28 +882,26 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     CASE dd-id.
 
-      WHEN 'A0'.
-        " begin of structure include
+      WHEN c_dd_id-structure_include-start.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
 
-      WHEN 'A1'.
-        " end of structure include
+      WHEN c_dd_id-structure_include-end.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
 
-      WHEN 'A2'.
-        " begin of boxed component
+      WHEN c_dd_id-boxed_component-start.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
 
-      WHEN 'A3'.
-        " end of boxed component
+      WHEN c_dd_id-boxed_component-end.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
 
-      WHEN 'AA'.
-        " simple element
-        current-dd-rtti = create_simple_element( type = dd-type leng = dd-leng decs = dd-decs ).
+      WHEN c_dd_id-primitive.
+        current-dd-rtti = create_data_primitive( type = dd-type leng = dd-leng decs = dd-decs ).
 
-      WHEN 'AB'.
-        " begin of structure
-        ASSERT 1 = 1.
-
-      WHEN 'AC'.
-        " end of structure
+      WHEN c_dd_id-structure-end.
         current-dd-rtti = cl_abap_structdescr=>get(
             p_components = VALUE #(
                 FOR rtti2 IN current-dd-rtti_s INDEX INTO j2
@@ -867,12 +909,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
                   type       = rtti2 ) )
             p_strict     = abap_false ). "cx_sy_struct_creation
 
-      WHEN 'AD'.
-        " begin of table
-        ASSERT 1 = 1.
-
-      WHEN 'AE'.
-        " end of table
+      WHEN c_dd_id-table-end.
         " NB: the table should have only one component
         CASE dd-type.
           WHEN c_ityp-struct1 OR c_ityp-struct2.
@@ -894,8 +931,11 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
         current-dd-rtti = cl_abap_tabledescr=>get( p_line_type = current-dd-rtti ).
         "cx_sy_table_creation
 
-      WHEN 'AF'.
-        " alignment bytes (FILLER)
+      WHEN c_dd_id-structure-start
+          OR c_dd_id-table-start
+          OR c_dd_id-filler.
+        " Nothing special
+        ASSERT 1 = 1.
 
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_expimp_table.
@@ -904,17 +944,17 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
     APPEND dd TO current-dd-lines.
 
     CASE dd-id.
-      WHEN 'AA'.
+      WHEN c_dd_id-primitive.
         " Classic field
         APPEND current-dd-rtti TO current-dd-rtti_s.
-      WHEN 'AC'
-        OR 'AE'.
+      WHEN c_dd_id-structure-end
+          OR c_dd_id-table-end.
         " End of structure or table -> POP from stack
         current-dd-rtti_s = current-dd-stack_of_rtti_s[ lines( current-dd-stack_of_rtti_s ) ].
         DELETE current-dd-stack_of_rtti_s INDEX lines( current-dd-stack_of_rtti_s ).
         APPEND current-dd-rtti TO current-dd-rtti_s.
-      WHEN 'AB'
-        OR 'AD'.
+      WHEN c_dd_id-structure-start
+          OR c_dd_id-table-start.
         " Begin of structure or table -> PUSH to stack
         APPEND current-dd-rtti_s TO current-dd-stack_of_rtti_s.
         current-dd-rtti_s = VALUE #( ).
@@ -923,17 +963,140 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD create_data_object.
+
+*    DATA: data_description     TYPE ty_data_description-v00_46,
+*          data_description_uni TYPE ty_data_description-uni,
+*          dd                   TYPE ty_dd.
+
+
+    CASE dd2-id.
+
+      WHEN c_dd_id-structure_include-start.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
+
+      WHEN c_dd_id-boxed_component-start.
+        " TODO
+        RAISE EXCEPTION TYPE zcx_expimp_table.
+
+      WHEN c_dd_id-primitive.
+        rtti = create_data_primitive( type = dd2-type leng = dd2-leng decs = dd2-decs ).
+
+      WHEN c_dd_id-structure-start.
+        rtti = create_data_structure( dd2 ).
+
+      WHEN c_dd_id-table-start.
+        " NB: the table should have only one component
+        rtti = create_data_table( dd2 ).
+
+      WHEN c_dd_id-structure-end
+          OR c_dd_id-table-end
+          OR c_dd_id-filler
+      OR c_dd_id-boxed_component-end
+      OR c_dd_id-structure_include-end.
+        ASSERT 0 = 1.
+
+      WHEN OTHERS.
+        RAISE EXCEPTION TYPE zcx_expimp_table.
+    ENDCASE.
+
+*      APPEND dd TO current-dd-lines.
+*
+*      CASE dd-id.
+*        WHEN c_dd_id-primitive.
+*          " Classic field
+*          APPEND current-dd-rtti TO current-dd-rtti_s.
+*        WHEN c_dd_id-structure-end
+*            OR c_dd_id-table-end.
+*          " End of structure or table -> POP from stack
+*          current-dd-rtti_s = current-dd-stack_of_rtti_s[ lines( current-dd-stack_of_rtti_s ) ].
+*          DELETE current-dd-stack_of_rtti_s INDEX lines( current-dd-stack_of_rtti_s ).
+*          APPEND current-dd-rtti TO current-dd-rtti_s.
+*        WHEN c_dd_id-structure-start
+*            OR c_dd_id-table-start.
+*          " Begin of structure or table -> PUSH to stack
+*          APPEND current-dd-rtti_s TO current-dd-stack_of_rtti_s.
+*          current-dd-rtti_s = VALUE #( ).
+*      ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD create_data_structure.
+
+    DATA: table_of_rtti TYPE TABLE OF REF TO cl_abap_typedescr.
+        FIELD-SYMBOLS <dd2_lines> TYPE ty_dd2_lines.
+
+        ASSIGN dd2-components->* TO <dd2_lines>.
+
+    LOOP AT <dd2_lines> REFERENCE INTO DATA(dd2_bis)
+        WHERE id <> c_dd_id-filler.
+      APPEND create_data_object( dd2_bis->* ) TO table_of_rtti.
+    ENDLOOP.
+
+    rtti = cl_abap_structdescr=>get(
+                p_strict     = abap_false
+                p_components = VALUE #(
+                    FOR rtti2 IN table_of_rtti INDEX INTO j2
+                        ( name = |CMP{ j2 WIDTH = 4 ALIGN = RIGHT PAD = '0' }|
+                          type = CAST #( rtti2 ) ) ) ).
+
+  ENDMETHOD.
+
+
+  METHOD create_data_table.
+
+    DATA: rtti_line_type TYPE REF TO cl_abap_datadescr.
+    FIELD-SYMBOLS <dd2_lines> TYPE ty_dd2_lines.
+
+    ASSIGN dd2-components->* TO <dd2_lines>.
+    IF lines( <dd2_lines> ) <> 1.
+      RAISE EXCEPTION TYPE zcx_expimp_table.
+    ENDIF.
+
+    DATA(dd2_bis) = <dd2_lines>[ 1 ].
+
+    IF dd2_bis-id = c_dd_id-structure-start.
+
+      rtti_line_type ?= create_data_structure( dd2_bis ).
+
+    ELSE.
+
+      rtti_line_type = create_data_primitive( type = dd2_bis-type leng = dd2_bis-leng decs = dd2_bis-decs ).
+
+    ENDIF.
+
+*    CASE dd2_bis-type.
+*      WHEN c_ityp-struct1 OR c_ityp-struct2.
+*        " Either its lines are structured
+*        rtti_line_type ?= create_data_structure( <dd2_lines> ).
+*      WHEN OTHERS.
+*        " Or its lines have an elementary type
+*        IF lines( <dd2_lines> ) > 1.
+*          RAISE EXCEPTION TYPE zcx_expimp_table.
+*        ENDIF.
+*        DATA(dd) = <dd2_lines>[ 1 ].
+*        rtti_line_type = create_data_primitive( type = dd-type leng = dd-leng decs = dd-decs ).
+*    ENDCASE.
+
+    rtti = cl_abap_tabledescr=>get( p_line_type = rtti_line_type ).
+    "cx_sy_table_creation
+
+  ENDMETHOD.
+
+
   METHOD create_default_description.
 
-    " No DD block -> Use data at Object Header
+    " No DD block -> Use information from Object Header
 
     current-dd-lines = VALUE #(
-        ( id   = 'AA'
+        ( id   = c_dd_id-primitive
           type = current-object-header_uni-ityp
           leng = current-object-header_uni-leng
           decs = current-object-header_uni-decs ) ).
 
-    current-dd-rtti = create_simple_element(
+    current-dd-rtti = create_data_primitive(
         type = current-object-header_uni-ityp
         leng = CONV #( current-object-header_uni-leng )
         decs = CONV #( current-object-header_uni-decs ) ).
@@ -941,49 +1104,12 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD terminate_data_value.
-
-    CASE current-dv-id.
-
-      WHEN '04'.
-        RETURN.
-
-      WHEN 'BB'.
-        " No end of data value
-
-      WHEN 'BC'.
-        assert_blob_curr_byte_and_skip( 'BD' ).
-
-      WHEN 'BE'.
-        " internal table
-        assert_blob_curr_byte_and_skip( 'BF' ).
-
-      WHEN 'CA'.
-        assert_blob_curr_byte_and_skip( 'CB' ).
-
-      WHEN 'CC'.
-        assert_blob_curr_byte_and_skip( 'CD' ).
-
-      WHEN OTHERS.
-        RAISE EXCEPTION TYPE zcx_expimp_table.
-
-    ENDCASE.
-
-    current-dv = VALUE #( ).
-*    current-dv = VALUE #(
-*        LET x = current-dv-dd_index IN
-*        id       = blob_curr_byte( )
-*        dd_index = x ).
-
-  ENDMETHOD.
-
-
-  METHOD create_simple_element.
+  METHOD create_data_primitive.
 
     TRY.
         CASE type.
           WHEN c_ityp-char.
-            rtti = cl_abap_elemdescr=>get_c( COND #( WHEN version = c_version-unicode THEN leng / 2 ELSE leng ) ).
+            rtti = cl_abap_elemdescr=>get_c( SWITCH #( conv->encoding WHEN '4102' OR '4103' THEN leng / 2 ELSE leng ) ).
           WHEN c_ityp-date.
             rtti = cl_abap_elemdescr=>get_d( ).
           WHEN c_ityp-decfloat16.
@@ -1003,7 +1129,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
           WHEN c_ityp-int8.
             rtti = cl_abap_elemdescr=>get_int8( ).
           WHEN c_ityp-num.
-            rtti = cl_abap_elemdescr=>get_n( COND #( WHEN version = c_version-unicode THEN leng / 2 ELSE leng ) ).
+            rtti = cl_abap_elemdescr=>get_n( SWITCH #( conv->encoding WHEN '4102' OR '4103' THEN leng / 2 ELSE leng ) ).
           WHEN c_ityp-packed.
             rtti = cl_abap_elemdescr=>get_p( p_length = leng p_decimals = decs ).
           WHEN c_ityp-string.
@@ -1027,23 +1153,46 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     DATA(position) = conv->position.
 
-    read_blob( IMPORTING data = data ).
+    conv->read( IMPORTING data = data ).
 
     current-dv-dd_off = current-dv-dd_off + conv->position - position.
 
   ENDMETHOD.
 
 
-  METHOD read_blob.
+  METHOD read_blob_struct.
 
     FIELD-SYMBOLS <x> TYPE x.
 
     DATA(xstring) = VALUE xstring( ).
-
     DESCRIBE FIELD data LENGTH DATA(length) IN BYTE MODE.
     conv->read( EXPORTING n = length IMPORTING data = xstring ).
-    ASSIGN data TO <x> CASTING.
-    <x> = xstring.
+
+    DATA:
+      conv2 TYPE REF TO cl_abap_conv_in_ce,
+      view  TYPE REF TO cl_abap_view_offlen.
+
+    conv2 = cl_abap_conv_in_ce=>create(
+              encoding = conv->encoding
+              endian = conv->endian ).
+    view = cl_abap_view_offlen=>create_legacy_view( data ).
+    conv->convert_struc(
+          EXPORTING input = xstring
+                    view  = view
+          IMPORTING data  = data ).
+
+*  ENDMETHOD.
+*
+*
+*  METHOD read_blob.
+*
+*    FIELD-SYMBOLS <x> TYPE x.
+*
+*    DATA(xstring) = VALUE xstring( ).
+*    DESCRIBE FIELD data LENGTH DATA(length) IN BYTE MODE.
+*    conv->read( EXPORTING n = length IMPORTING data = xstring ).
+*    ASSIGN data TO <x> CASTING.
+*    <x> = xstring.
 
   ENDMETHOD.
 
@@ -1057,20 +1206,23 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     CASE dd2-id.
 
-      WHEN 'AA'.
+      WHEN c_dd_id-primitive.
+
         IF rtti->kind <> rtti->kind_elem.
           RAISE EXCEPTION TYPE zcx_expimp_table.
         ENDIF.
+
         read_data_primitive(
             EXPORTING dd2 = dd2
             IMPORTING dv = dv off = off ).
 
-      WHEN 'AB'.
-        " BEGIN OF STRUCTURE
+      WHEN c_dd_id-structure-start.
+
         IF rtti->kind <> rtti->kind_struct.
           RAISE EXCEPTION TYPE zcx_expimp_table.
         ENDIF.
         ASSIGN dd2-components->* TO <dd2_lines>.
+
         read_data_structure(
             EXPORTING
                 dd2_lines = <dd2_lines>
@@ -1078,26 +1230,18 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
                 dv = dv
                 off = off ).
 
-      WHEN 'AC'.
-        " END OF STRUCTURE
-        " Do nothing
-        BREAK-POINT.
+      WHEN c_dd_id-table-start.
 
-      WHEN 'AD'.
         IF rtti->kind <> rtti->kind_table.
           RAISE EXCEPTION TYPE zcx_expimp_table.
         ENDIF.
         ASSIGN dd2-components->* TO <dd2_lines>.
+
         read_data_table(
             EXPORTING
                 dd2_lines = <dd2_lines>
                 dd_index = current-dv-dd_index
             IMPORTING dv = dv ).
-
-      WHEN 'AE'.
-        " END OF TABLE
-        " Do nothing
-        BREAK-POINT.
 
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_expimp_table.
@@ -1113,30 +1257,25 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       dah_interval_uni   TYPE ty_dah-interval-uni,
       dah_string_xstring TYPE ty_dah-string_xstring.
 
-    IF ( current-dv-id = 'BD' AND current-dv-dd_off = current-dv-len )
-        OR current-dv-id = 'CB'.
-
-      terminate_data_value( ).
-
-    ENDIF.
 
     CASE current-dv-id.
 
       WHEN c_dv_id-single.
-        " Whole length of Data Description
+    data(b) = 0.
+     b = b + 1.
         read_blob_dv( IMPORTING data = dv ).
 
       WHEN c_dv_id-interval-start.
-        " Interval
+
         IF current-dv-dd_off = 0.
           " Start of Data Value
           CASE version.
-            WHEN c_version-unicode.
-              read_blob( IMPORTING data = dah_interval_uni ).
+            WHEN c_version-v06.
+              read_blob_struct( IMPORTING data = dah_interval_uni ).
               ASSERT dah_interval_uni-id = c_dv_id-interval-start.
               current-dv-len = dah_interval_uni-len.
             WHEN OTHERS.
-              read_blob( IMPORTING data = dah_interval ).
+              read_blob_struct( IMPORTING data = dah_interval ).
               ASSERT dah_interval-id = c_dv_id-interval-start.
               current-dv-len = dah_interval-len.
           ENDCASE.
@@ -1144,19 +1283,25 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
         read_blob_dv( IMPORTING data = dv ).
 
+        IF current-dv-dd_off = current-dv-len.
+          assert_blob_curr_byte_and_skip( c_dv_id-interval-end ).
+          current-dv = VALUE #( id = blob_curr_byte( ) ).
+        ENDIF.
+
       WHEN c_dv_id-string_xstring-start.
 
-        read_blob( IMPORTING data = dah_string_xstring ).
+        read_blob_struct( IMPORTING data = dah_string_xstring ).
         ASSERT dah_string_xstring-id = c_dv_id-string_xstring-start.
 
         conv->read(
-            EXPORTING n = COND #( WHEN version = c_version-unicode
+            EXPORTING n = COND #( WHEN version = c_version-v06
                 THEN dah_string_xstring-len / 2 ELSE dah_string_xstring-len )
             IMPORTING data = dv ).
 
-        terminate_data_value( ).
-
         current-dv-dd_off = current-dv-dd_off + 8.
+
+        assert_blob_curr_byte_and_skip( c_dv_id-string_xstring-end ).
+        current-dv = VALUE #( id = blob_curr_byte( ) ).
 
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_expimp_table.
@@ -1171,10 +1316,17 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     LOOP AT dd2_lines REFERENCE INTO DATA(dd2).
 
-      IF dd2->id = 'AF'.
+      IF dd2->id = c_dd_id-filler.
 
-        current-dv-dd_off = current-dv-dd_off + dd2->leng.
         conv->skip_x( dd2->leng ).
+
+        IF current-dv-id = c_dv_id-interval-start.
+          current-dv-dd_off = current-dv-dd_off + dd2->leng.
+          IF current-dv-dd_off = current-dv-len.
+            assert_blob_curr_byte_and_skip( c_dv_id-interval-end ).
+            current-dv = VALUE #( id = blob_curr_byte( ) ).
+          ENDIF.
+        ENDIF.
 
       ELSE.
 
@@ -1195,8 +1347,6 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     ENDLOOP.
 
-    terminate_data_value( ).
-
   ENDMETHOD.
 
 
@@ -1210,11 +1360,11 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       <line> TYPE any.
 
     CASE version.
-      WHEN c_version-unicode.
-        read_blob( IMPORTING data = dah_table_uni ).
+      WHEN c_version-v06.
+        read_blob_struct( IMPORTING data = dah_table_uni ).
         ASSERT dah_table_uni-id = c_dv_id-table-start.
       WHEN OTHERS.
-        read_blob( IMPORTING data = dah_table ).
+        read_blob_struct( IMPORTING data = dah_table ).
         ASSERT dah_table-id = c_dv_id-table-start.
         current-dv-len = dah_table-len.
     ENDCASE.
@@ -1233,13 +1383,15 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       CLEAR <line>.
       read_data_object2(
         EXPORTING
-            dd2 = dd2_lines[ 1 ] "dd2->*
+            dd2 = dd2_lines[ 1 ] "describes the type of line
         IMPORTING
             dv  = <line> ).
 
       INSERT <line> INTO TABLE dv.
 
     ENDDO.
+
+    assert_blob_curr_byte_and_skip( c_dv_id-table-end ).
 
   ENDMETHOD.
 
@@ -1273,664 +1425,5 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
   ENDMETHOD.
 
-
-  METHOD dummy.
-
-*              "======================
-*              " Field Name
-*              "======================
-*              " NLEN contains the number of characters encoded with
-*              " TRANSPORT_HEADER-CODEPAGE (one character occupies
-*              " between 1 and 4 bytes).
-**              CASE version.
-**                WHEN '06'.
-**                  DATA nlen TYPE i.
-**                  nlen = object_header_uni-nlen.
-**                WHEN OTHERS.
-**                  nlen = object_header-nlen.
-**              ENDCASE.
-*              DATA(object_name) = ||.
-**              dd = VALUE #( ).
-*              dds = VALUE #( ).
-**              block_type = 'DD'.
-*    process_object_name( ).
-
-*    current-dd-lines = VALUE #( ).
-*    rtti_s = VALUE #( ).
-*    object_id = blob+conv->position(1).
-*    rtti ?= null_object.
-
-*                    OR 'CD'." end of boxed component
-*                  "---------------------
-*                  " end of something
-*                  "---------------------
-*                  conv->skip_x( 1 ).
-*
-*                  IF lines( dvs ) = 0.
-*                    RAISE EXCEPTION TYPE zcx_expimp_table.
-*                  ENDIF.
-*                  dv = dvs[ lines( dvs ) ].
-*                  ASSIGN dv-dref->* TO <dv_field>.
-*                  DELETE dvs INDEX lines( dvs ).
-*                  IF lines( dvs ) = 0.
-*                    block_type = 'OH'.
-*                  ENDIF.
-
-*    TRY.
-*
-*        DATA(block_type) = 'OH'.
-*        WHILE conv->position <= xstrlen( blob ).
-*
-*          CASE block_type.
-*
-*            WHEN 'OH'.
-*              "======================
-*              " Object Header
-*              "======================
-*              dds = VALUE #( ).
-*              rtti_s = VALUE #( ).
-*              object_id = blob+conv->position(1).
-*              IF object_id = c_object_id-end_of_data.
-*                "======================
-*                " END OF DATA
-*                "======================
-*                " (NB: should be the last byte of the blob)
-*                EXIT.
-*              ENDIF.
-*              CASE version.
-*                WHEN '06'.
-*                  read_blob( IMPORTING data = object_header_uni ).
-**                  read_blob object_header_uni.
-*                WHEN OTHERS.
-*                  read_blob( IMPORTING data = object_header ).
-**                  read_blob object_header.
-*              ENDCASE.
-*              rtti ?= null_object.
-*              block_type = 'FN'.
-*
-*            WHEN 'FN'.
-*              "======================
-*              " Field Name
-*              "======================
-*              " NLEN contains the number of characters encoded with
-*              " TRANSPORT_HEADER-CODEPAGE (one character occupies
-*              " between 1 and 4 bytes).
-*              CASE version.
-*                WHEN '06'.
-*                  DATA nlen TYPE i.
-*                  nlen = object_header_uni-nlen.
-*                WHEN OTHERS.
-*                  nlen = object_header-nlen.
-*              ENDCASE.
-*              DATA(object_name) = ||.
-*              conv->read( EXPORTING n = nlen IMPORTING data = object_name ).
-*              dd = VALUE #( ).
-*              dds = VALUE #( ).
-*              block_type = 'DD'.
-*
-*            WHEN 'DD'.
-*              "======================
-*              " Data Description
-*              "======================
-*
-*              IF blob+conv->position(1) BETWEEN 'A0' AND 'AF'.
-*
-*                CASE version.
-*                  WHEN '06'.
-*                    read_blob( IMPORTING data = data_description_uni ).
-*                    dd = VALUE #(
-*                        id   = data_description_uni-id
-*                        type = data_description_uni-type
-*                        leng = data_description_uni-flen
-*                        decs = data_description_uni-decs ).
-*                  WHEN OTHERS.
-*                    read_blob( IMPORTING data = data_description ).
-*                    dd = VALUE #(
-*                        id   = data_description-id
-*                        type = data_description-type
-*                        leng = data_description-flen
-*                        decs = 0 ).
-*                ENDCASE.
-*
-*                CASE dd-id.
-*                  WHEN 'A0'.
-*                    " begin of structure include
-*                  WHEN 'A1'.
-*                    " end of structure include
-*                  WHEN 'A2'.
-*                    " begin of boxed component
-*                  WHEN 'A3'.
-*                    " end of boxed component
-*                  WHEN 'AA'.
-*                    " simple element
-*                    rtti = create_simple_element( type = dd-type leng = dd-leng decs = dd-decs ).
-*                  WHEN 'AB'.
-*                    " begin of structure
-*                    ASSERT 1 = 1.
-*                  WHEN 'AC'.
-*                    " end of structure
-*                    rtti = cl_abap_structdescr=>get(
-*                        p_components = VALUE #(
-*                            FOR rtti2 IN rtti_s INDEX INTO j2
-*                            ( name       = |CMP{ j2 WIDTH = 4 ALIGN = RIGHT PAD = '0' }|
-*                              type       = rtti2 ) )
-*                        p_strict     = abap_false ). "cx_sy_struct_creation
-*                  WHEN 'AD'.
-*                    " begin of table
-*                    ASSERT 1 = 1.
-*                  WHEN 'AE'.
-*                    " end of table
-*                    " NB: the table should have only one component
-*                    CASE dd-type.
-*                      WHEN c_ityp-struct1 OR c_ityp-struct2.
-*                        rtti = cl_abap_structdescr=>get(
-*                                    p_components = VALUE #(
-*                                        FOR rtti2 IN rtti_s INDEX INTO j2
-*                                        ( name       = |CMP{ j2 WIDTH = 4 ALIGN = RIGHT PAD = '0' }|
-*                                          type       = rtti2 ) )
-*                                    p_strict     = abap_false ). "cx_sy_struct_creation
-*                      WHEN OTHERS.
-*                        rtti = rtti_s[ 1 ].
-*                    ENDCASE.
-*                    rtti = cl_abap_tabledescr=>get( p_line_type = rtti ). "cx_sy_table_creation
-*                  WHEN 'AF'.
-*                    " alignment bytes
-*                ENDCASE.
-*
-*                APPEND dd TO dds.
-*
-*                IF dd-id <> 'AF'.
-*                  IF rtti IS BOUND.
-*                    " end of something
-*                    IF rtti IS NOT INSTANCE OF cl_abap_elemdescr.
-*                      " structure or table -> POP stack
-*                      READ TABLE stack INDEX lines( stack ) INTO rtti_s.
-*                      DELETE stack INDEX lines( stack ).
-*                    ENDIF.
-*                    APPEND rtti TO rtti_s.
-*                  ELSE.
-*                    APPEND rtti_s TO stack.
-*                    rtti_s = VALUE #( ).
-*                  ENDIF.
-*                ENDIF.
-*
-*              ELSE.
-*
-*                IF rtti IS NOT BOUND.
-*                  " No DD block -> Use data at Object Header
-*                  CASE version.
-*                    WHEN '06'.
-*                      dd = VALUE #(
-*                          id   = 'AA'
-*                          type = object_header_uni-ityp
-*                          leng = object_header_uni-leng
-*                          decs = object_header_uni-decs ).
-*                    WHEN OTHERS.
-*                      dd = VALUE #(
-*                          id   = 'AA'
-*                          type = object_header-ityp
-*                          leng = object_header-leng ).
-*                  ENDCASE.
-*                  dds = VALUE #( ( dd ) ).
-*                  rtti = create_simple_element( type = dd-type leng = dd-leng decs = dd-decs ).
-*                ENDIF.
-*
-*                TYPES : BEGIN OF ty_dv,
-*                          dref     TYPE REF TO data,
-*                          rtti     TYPE REF TO cl_abap_datadescr,
-*                          dd_pos   TYPE i,
-*                          off      TYPE i,
-*                          comp_num TYPE i,
-*                        END OF ty_dv,
-*                        ty_dvs TYPE STANDARD TABLE OF ty_dv WITH EMPTY KEY.
-*
-*                DATA(dv) = VALUE ty_dv( rtti = rtti ).
-*                DATA(dvs) = VALUE ty_dvs( ).
-*
-*                CREATE DATA dv-dref TYPE HANDLE rtti.
-*                ASSIGN dv-dref->* TO FIELD-SYMBOL(<dv_field>).
-*
-*                partab = VALUE #(
-*                    BASE partab
-*                    ( name = object_name
-*                      dref = dref ) ).
-*
-*                block_type = 'DV'.
-*
-*              ENDIF.
-*
-*            WHEN 'DV'.
-*              "=====================
-*              "  Data Value
-*              "=====================
-*              read_data_value( EXPORTING xdds = xdds IMPORTING dv = <dv_field> ).
-*
-*          ENDCASE.
-*
-*          IF rtti IS INSTANCE OF cl_abap_tabledescr
-*              AND dv-off = dd-leng.
-*            " Will not work with sorted and hashed internal tables,
-*            " as the key components cannot be changed.
-**                ASSIGN <fs> TO <table>.
-**                INSERT INITIAL LINE INTO TABLE <table> ASSIGNING <fs>.
-*            INSERT <fs> INTO TABLE <table>.
-*            rtti ?= cl_abap_typedescr=>describe_by_data( <fs> ).
-*            dv-comp_num = 0.
-*            dv-dd_pos = 1.
-*          ENDIF.
-*
-**      ENDCASE.
-*
-*        ENDWHILE.
-*
-*      CATCH cx_root INTO DATA(lx).
-*        RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING previous = lx.
-*    ENDTRY.
-
-*    "---------------------
-*    " starts with BE and ends with BF
-*    "---------------------
-*
-*    DATA:
-*      dah_table     TYPE ty_dah-table-v00_46,
-*      dah_table_uni TYPE ty_dah-table-uni,
-*      dref          TYPE REF TO data.
-*
-*    " read width and number of lines of the internal table
-*    CASE version.
-*      WHEN '06'.
-*        read_blob( IMPORTING data = dah_table_uni ).
-*        IF dah_table_uni-id <> 'BE'.
-*          RAISE EXCEPTION TYPE zcx_expimp_table.
-*        ENDIF.
-*      WHEN OTHERS.
-*        read_blob( IMPORTING data = dah_table ).
-*        IF dah_table-id <> 'BE'.
-*          RAISE EXCEPTION TYPE zcx_expimp_table.
-*        ENDIF.
-*    ENDCASE.
-*
-*    " Create a work area for containing each line of the table
-*    FIELD-SYMBOLS <dv_table> TYPE ANY TABLE.
-*    ASSIGN dv TO <dv_table>.
-*    CREATE DATA dref LIKE LINE OF <dv_table>.
-*    ASSIGN dref->* TO FIELD-SYMBOL(<dv_line>).
-*    DATA(rtti) = cl_abap_typedescr=>describe_by_data( <dv_line> ).
-*
-*    DATA(len_line) = 0.
-*
-*    DO.
-*
-*      LOOP AT dds INTO DATA(dd) FROM from.
-*        DATA(dd_tabix) = sy-tabix.
-*
-*        IF blob+conv->position(1) = 'BF'. " end of table
-*          IF len_line <> 0.
-*            RAISE EXCEPTION TYPE zcx_expimp_table.
-*          ENDIF.
-*          EXIT.
-*        ENDIF.
-*
-*        read_data_value(
-*            EXPORTING
-*                dds  = dds
-**                from = dd_tabix
-*            IMPORTING
-*                dv   = <dv_line>
-*                off  = DATA(off2) ).
-*
-*        len_line = len_line + off2.
-*
-*        IF ( version = '06' AND len_line = dah_table_uni-len )
-*        OR ( version <> '06' AND len_line = dah_table-len ).
-*          INSERT <dv_line> INTO TABLE <dv_table>.
-*          len_line = 0.
-*          CLEAR <dv_line>.
-*        ENDIF.
-*
-*      ENDLOOP.
-*
-*      IF blob+conv->position(1) = 'BF'. " end of table
-*        conv->skip_x( 1 ).
-*        EXIT.
-*      ENDIF.
-*
-*    ENDDO.
-*
-*
-*    " an internal table occupies 8 bytes
-*    off = 8.
-
-*    "---------------------
-*    " starts with BC and ends with BD
-*    "---------------------
-*
-*    DATA:
-*      dah_interval     TYPE ty_dah-interval-v00_46,
-*      dah_interval_uni TYPE ty_dah-interval-uni,
-*      len              TYPE i,
-*      xstring          TYPE xstring.
-*
-*    CASE version.
-*      WHEN '06'.
-*        read_blob( IMPORTING data = dah_interval_uni ).
-*        IF dah_interval_uni-id <> 'BC'.
-*          RAISE EXCEPTION TYPE zcx_expimp_table.
-*        ENDIF.
-*        len = dah_interval_uni-len.
-*      WHEN OTHERS.
-*        read_blob( IMPORTING data = dah_interval ).
-*        IF dah_interval-id <> 'BC'.
-*          RAISE EXCEPTION TYPE zcx_expimp_table.
-*        ENDIF.
-*        len = dah_interval-len.
-*    ENDCASE.
-*
-*data(Dd_indexes) = get_dd_indexes( dd len ).
-*
-*    DATA(rtti) = cl_abap_typedescr=>describe_by_data( dv ).
-*
-*    LOOP AT dds INTO DATA(dd) FROM dd_index.
-*
-*      ADD 1 TO dd_index.
-*
-*      ASSIGN COMPONENT dv-comp_num OF STRUCTURE dv TO FIELD-SYMBOL(<dv_field>).
-*
-*      conv->read( EXPORTING n = dd-leng IMPORTING data = xstring ).
-*
-*      read_data_value( EXPORTING xstring = xstring IMPORTING dv = dv off = off2 ).
-*
-*    ENDLOOP.
-*
-*    IF blob+conv->position(1) <> 'BD'. " end of interval
-*      RAISE EXCEPTION TYPE zcx_expimp_table.
-*    ENDIF.
-*
-*    conv->skip_x( 1 ).
-*
-**    read_data_value( IMPORTING dv = dv off = off2 ).
-*
-*
-*
-*    WHILE dv-dd_pos < lines( dds ) AND dv-off <= 1.
-*
-*      dv-dd_pos = dv-dd_pos + 1.
-*      dd = dds[ dv-dd_pos ].
-*
-*      CASE TYPE OF rtti.
-*        WHEN TYPE cl_abap_structdescr.
-*          dv-comp_num = dv-comp_num + 1.
-*          ASSIGN COMPONENT dv-comp_num OF STRUCTURE <dv_field> TO <field>.
-*          IF sy-subrc <> 0.
-*            RAISE EXCEPTION TYPE zcx_expimp_table.
-*          ENDIF.
-*        WHEN OTHERS.
-*          ASSIGN <fs> TO <field>.
-*      ENDCASE.
-*      " dv_field = xstring+dv_off(dd-leng).
-*
-*      CASE dd-type.
-*        WHEN c_ityp-char
-*            OR c_ityp-date
-*            OR c_ityp-num
-*            OR c_ityp-time
-*            OR c_ityp-string.
-*          conv->read( IMPORTING data  = <field> ).
-*        WHEN c_ityp-hex
-*            OR c_ityp-packed
-*            OR c_ityp-xstring.
-*          "<field> = dv_field.
-*        WHEN c_ityp-decfloat16
-*            OR c_ityp-decfloat34
-*            OR c_ityp-int
-*            OR c_ityp-int1
-*            OR c_ityp-int2
-*            OR c_ityp-int8
-*            OR c_ityp-float.
-*          conv->read( IMPORTING data  = <field> ).
-*        WHEN OTHERS.
-*          RAISE EXCEPTION TYPE zcx_expimp_table.
-*      ENDCASE.
-*      dv-off = dv-off + dd-leng.
-*
-*      CASE dd-id.
-*        WHEN 'AB'.
-*          " begin of structure
-*        WHEN 'AC'.
-*          " end of structure
-*          "READ TABLE drefs INDEX lines( drefs ) INTO dref.
-*          "DELETE drefs INDEX lines( drefs ).
-*          "ASSIGN dref->* TO <fs>.
-*        WHEN 'AF'.
-*          " Filler
-*          dv-off = dv-off + dd-leng.
-*      ENDCASE.
-*
-*      dv-dd_pos = dv-dd_pos + 1.
-*    ENDWHILE.
-*
-*
-**                WHEN 'BD'   " end of interval
-**                  "---------------------
-**                  " end of something
-**                  "---------------------
-**                  conv->skip_x( 1 ).
-**
-**                  IF lines( dvs ) = 0.
-**                    RAISE EXCEPTION TYPE zcx_expimp_table.
-**                  ENDIF.
-**                  dv = dvs[ lines( dvs ) ].
-**                  ASSIGN dv-dref->* TO <dv_field>.
-**                  DELETE dvs INDEX lines( dvs ).
-**                  IF lines( dvs ) = 0.
-**                    block_type = 'OH'.
-**                  ENDIF.
-
-*      BEGIN OF ty_current_dv_block,
-*        id   TYPE x LENGTH 1,
-*        off  TYPE i,
-*        len  TYPE i,
-*        dref TYPE REF TO data,
-*      END OF ty_current_dv_block.
-
-*    METHODS read_data_value
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-
-*    METHODS read_data_value_single
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-*
-*    METHODS read_data_value_interval
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-
-*    METHODS read_data_value_table
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-
-*    METHODS read_data_value_string_xstring
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-
-*    METHODS read_data_value_boxed
-*      IMPORTING
-*        xdds TYPE ty_dds
-*      EXPORTING
-*        dv   TYPE any
-*        off  TYPE i
-*      RAISING
-*        zcx_expimp_table.
-
-*  METHOD read_data_value.
-*
-*    DATA:
-*      dah_interval     TYPE ty_dah_interval,
-*      dah_interval_uni TYPE ty_dah_interval_uni.
-*    FIELD-SYMBOLS:
-*      <dah_interval>     TYPE ty_dah_interval,
-*      <dah_interval_uni> TYPE ty_dah_interval_uni.
-*
-*    DATA(dd) = current-dd-lines[ 1 ].
-*
-**    IF current_dv_block IS INITIAL.
-*
-*    current-dv-id = blob+conv->position(1).
-*    CASE current-dv-id.
-*      WHEN 'BB'.
-*        " Flat value
-*        current-dv-len = dd-leng.
-*        conv->skip_x( 1 ).
-*      WHEN 'BC'.
-*        " interval
-*        CASE version.
-*          WHEN '06'.
-*            CREATE DATA current-dv-dref TYPE ty_dah_interval_uni.
-*            ASSIGN current-dv-dref->* TO <dah_interval_uni>.
-*            read_blob( IMPORTING data = <dah_interval_uni> ).
-**        IF dah_interval_uni-id <> 'BC'.
-**          RAISE EXCEPTION TYPE zcx_expimp_table.
-**        ENDIF.
-*            current-dv-len = dah_interval_uni-len.
-*          WHEN OTHERS.
-*            read_blob( IMPORTING data = dah_interval ).
-*            IF dah_interval-id <> 'BC'.
-*              RAISE EXCEPTION TYPE zcx_expimp_table.
-*            ENDIF.
-*            current-dv-len = dah_interval-len.
-*        ENDCASE.
-*      WHEN 'BE'.
-*        " begin of internal table
-*      WHEN 'CA'.
-*        "
-*      WHEN 'CC'.
-*        "
-*      WHEN OTHERS.
-*        RAISE EXCEPTION TYPE zcx_expimp_table.
-*    ENDCASE.
-*
-**    ENDIF.
-**    CASE current_dv_block-id.
-**      WHEN 'BB'.
-**        IF dd-id <> 'AA'.
-**          RAISE EXCEPTION TYPE zcx_expimp_table.
-**        ENDIF.
-**        read_data_value_single( EXPORTING xdds = xdds IMPORTING dv = dv off = off ).
-**      WHEN 'BC'.
-**        IF dd-id <> 'AB'.
-**          RAISE EXCEPTION TYPE zcx_expimp_table.
-**        ENDIF.
-**        read_data_value_interval( EXPORTING xdds = xdds IMPORTING dv = dv off = off ).
-**      WHEN 'BE'.
-**        IF dd-id <> 'AD'.
-**          RAISE EXCEPTION TYPE zcx_expimp_table.
-**        ENDIF.
-**        read_data_value_table( EXPORTING xdds = xdds IMPORTING dv = dv off = off ).
-**      WHEN 'CA'.
-**        CASE dd-id.
-**          WHEN 'AA' OR ''.
-**            read_data_value_string_xstring( EXPORTING xdds = xdds IMPORTING dv = dv off = off ).
-**          WHEN OTHERS.
-**            RAISE EXCEPTION TYPE zcx_expimp_table.
-**        ENDCASE.
-**      WHEN 'CC'.
-**        read_data_value_boxed( EXPORTING xdds = xdds IMPORTING dv = dv off = off ).
-**      WHEN OTHERS.
-**        RAISE EXCEPTION TYPE zcx_expimp_table.
-**    ENDCASE.
-*
-*  ENDMETHOD.
-
-
-*  METHOD read_data_value_single.
-*
-*    "---------------------
-*    " single value - no Data Area Header
-*    "---------------------
-*    " It's the value of the whole field or structure (no filler)
-*
-**    DATA: len TYPE i.
-**    len = dd-leng.
-*
-*    read_blob( IMPORTING data = dv ).
-*
-*    off = off.
-*
-**    IF lines( dvs ) = 0.
-**      block_type = 'OH'.
-**    ENDIF.
-*
-*  ENDMETHOD.
-
-
-*  METHOD read_data_value_table.
-*
-*  ENDMETHOD.
-
-
-*  METHOD read_data_value_string_xstring.
-*
-*    "---------------------
-*    " starts with CA and ends with CB
-*    "---------------------
-*
-*    DATA: dah_string_xstring TYPE ty_dah-string_xstring.
-*
-*    read_blob( IMPORTING data = dah_string_xstring ).
-*
-*    IF dah_string_xstring-id <> 'CA'.
-*      RAISE EXCEPTION TYPE zcx_expimp_table.
-*    ENDIF.
-*
-*    conv->read( EXPORTING n = CONV #( dah_string_xstring-len ) IMPORTING data = dv ).
-*
-*    IF blob_curr_byte( ) = 'CB'.
-*      conv->skip_x( 1 ).
-*    ELSE.
-*      RAISE EXCEPTION TYPE zcx_expimp_table.
-*    ENDIF.
-*
-*    off = 8.
-*
-*  ENDMETHOD.
-
-
-*  METHOD read_data_value_boxed.
-*
-*    "---------------------
-*    " starts with CC and ends with CD
-*    "---------------------
-*
-*    " TODO
-*    RAISE EXCEPTION TYPE zcx_expimp_table.
-*
-*  ENDMETHOD.
-
-  ENDMETHOD.
 
 ENDCLASS.
