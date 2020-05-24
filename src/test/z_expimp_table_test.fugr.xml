@@ -27,6 +27,9 @@
        <EXCEPTION>IMPORT_ERROR</EXCEPTION>
       </RSEXC>
       <RSEXC>
+       <EXCEPTION>STD_IMPORT_ERROR</EXCEPTION>
+      </RSEXC>
+      <RSEXC>
        <EXCEPTION>DBUF_IMPORT_CREATE_DATA</EXCEPTION>
       </RSEXC>
       <RSEXC>
@@ -50,6 +53,10 @@
       </RSFDO>
       <RSFDO>
        <PARAMETER>IMPORT_ERROR</PARAMETER>
+       <KIND>X</KIND>
+      </RSFDO>
+      <RSFDO>
+       <PARAMETER>STD_IMPORT_ERROR</PARAMETER>
        <KIND>X</KIND>
       </RSFDO>
       <RSFDO>

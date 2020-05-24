@@ -20,8 +20,8 @@ CLASS ltc_main DEFINITION
     METHODS itab_two_lines FOR TESTING RAISING cx_static_check.
     METHODS iso_8859_1 FOR TESTING RAISING cx_static_check.
     METHODS version_03 FOR TESTING RAISING cx_static_check.
+    METHODS version_03_filler FOR TESTING RAISING cx_static_check.
 
-    METHODS import_from_database.
     METHODS compare.
     METHODS compare2 IMPORTING partab2 TYPE tab_cpar.
 
@@ -145,40 +145,6 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD import_from_database.
-
-    DATA(eudb_key) = VALUE rseu1_key(
-        name  = '/ASU/ASUSTART'
-        sprsl = 'D' ).
-    DATA(string) = repeat( val = ` ` occ = 10 ).
-    EXPORT string = string TO DATABASE eudb(zz) ID eudb_key.
-
-    DATA dref TYPE REF TO data.
-    FIELD-SYMBOLS <fs> TYPE any.
-
-    SELECT * FROM eudb
-        WHERE relid = 'ZZ'
-          AND name  = '/ASU/ASUSTART'
-          AND sprsl = 'D'
-        INTO TABLE @DATA(table_lines).
-
-    ROLLBACK WORK.
-
-*  SELECT * FROM vari
-*      CLIENT SPECIFIED
-*      WHERE mandt   = '000'
-*        AND relid   = 'VA'
-*        AND report  = 'ABAP_INTROSPECTOR_01'
-*        AND variant = 'SAP&BOPF'
-*      INTO TABLE @DATA(table_lines).
-
-    DATA(blob) = VALUE xstring( ).
-    LOOP AT table_lines REFERENCE INTO DATA(table_line).
-      blob = blob && table_line->clustd(table_line->clustr).
-    ENDLOOP.
-
-  ENDMETHOD.
-
   METHOD compare.
 
     TRY.
@@ -190,8 +156,8 @@ CLASS ltc_main IMPLEMENTATION.
     TRY.
         DATA(partab) = NEW zcl_expimp_utilities( )->dbuf_import_create_data( CHANGING dbuf = blob ).
       CATCH cx_root INTO DATA(lx2).
-      data(b) = 0.
-      b = b + 1.
+        DATA(b) = 0.
+        b = b + 1.
         cl_abap_unit_assert=>fail( msg = 'error during custom IMPORT' ).
     ENDTRY.
 
@@ -212,8 +178,6 @@ CLASS ltc_main IMPLEMENTATION.
 
   METHOD compare2.
 
-      data(b) = 0.
-      b = b + 3.
     TRY.
         DATA(partab) = NEW zcl_expimp_utilities( )->dbuf_import_create_data( CHANGING dbuf = blob ).
       CATCH cx_root INTO DATA(lx2).
@@ -236,22 +200,60 @@ CLASS ltc_main IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD version_03.
-    DATA: BEGIN OF vari,
-            a TYPE i,
-          END OF vari,
-          BEGIN OF varivdat,
-            b TYPE decfloat16,
-            c TYPE decfloat34,
-            d TYPE int8,
-          END OF varivdat.
-    vari = VALUE #( a = 8 ).
-    data(B) = 0. b = b + 1.
-    variVDAT = VALUE #( b = 8 ).
+
+    TYPES: BEGIN OF ty_vari,
+             cmp0001 TYPE c LENGTH 8,
+             cmp0002 TYPE i,
+             cmp0003 TYPE c LENGTH 1,
+             cmp0004 TYPE i,
+             cmp0005 TYPE c LENGTH 1,
+             cmp0006 TYPE c LENGTH 30,
+             cmp0007 TYPE c LENGTH 1,
+             cmp0008 TYPE c LENGTH 1,
+             cmp0009 TYPE i,
+             cmp0010 TYPE c LENGTH 1,
+             cmp0011 TYPE c LENGTH 30,
+             cmp0012 TYPE c LENGTH 1,
+             cmp0013 TYPE c LENGTH 1,
+           END OF ty_vari,
+           tt_vari TYPE STANDARD TABLE OF ty_vari WITH EMPTY KEY,
+           BEGIN OF ty_varivdat,
+             cmp0001 TYPE c LENGTH 8,
+             cmp0002 TYPE c LENGTH 1,
+             cmp0003 TYPE c LENGTH 2,
+             cmp0004 TYPE i,
+             cmp0005 TYPE i,
+           END OF ty_varivdat,
+           tt_varivdat TYPE STANDARD TABLE OF ty_varivdat WITH EMPTY KEY.
+
+    DATA(vari) = VALUE tt_vari( ). " internal table
+    DATA(varivdat) = VALUE tt_varivdat( ). " internal table
+    DATA(prot) = 'F'.
+    DATA(func) = 'S'.
     blob = 'FF03010101020000313130300000000003000060004106255F56415249AA000008AA080004AA000001AA080004AA000001AA00001EAA000001AA000001AA080004AA000001AA00001EAA000001AA000001'
         && '0300001400250A255F5641524956444154AA000008AA000001AA000002AA080004AA08000401000001000D0450524F54BB4601000001000D0446554E43BB5304'.
     compare2( VALUE #(
-        ( name = 'VARI'     dref = REF #( vari ) )
-        ( name = 'VARIVDAT' dref = REF #( varivdat ) ) ) ).
+        ( name = '%_VARI'     dref = REF #( vari ) )
+        ( name = '%_VARIVDAT' dref = REF #( varivdat ) )
+        ( name = 'PROT'       dref = REF #( prot ) )
+        ( name = 'FUNC'       dref = REF #( func ) ) ) ).
+
+  ENDMETHOD.
+
+  METHOD version_03_filler.
+
+    TYPES: BEGIN OF ty_vari,
+             cmp0001 TYPE c LENGTH 8,
+             cmp0002 TYPE i,
+             cmp0003 TYPE c LENGTH 1,
+             cmp0004 TYPE i,
+           END OF ty_vari,
+           tt_vari TYPE STANDARD TABLE OF ty_vari WITH EMPTY KEY.
+
+    " Implicit filler (not described with AF) of 3 bytes between CMP0003 and CMP0004
+    blob = 'FF0301010102000031313030000000000300005C002C06255F56415249AA000008AA080004AA000001AA080004BB46554E432020202000000000500000000000000104'.
+    cl_abap_unit_assert=>fail( msg = 'TODO' ).
+
   ENDMETHOD.
 
   METHOD iso_8859_1.
@@ -267,9 +269,9 @@ CLASS ltc_main IMPLEMENTATION.
 
     DATA aa TYPE c LENGTH 2 VALUE 'AB'.
     EXPORT character-variable = aa TO DATA BUFFER blob.
-data(b) = 0.
+    DATA(b) = 0.
     compare( ).
-b = b + 1.
+    b = b + 1.
   ENDMETHOD.
 
   METHOD primitive_i.

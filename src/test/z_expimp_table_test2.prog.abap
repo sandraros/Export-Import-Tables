@@ -62,7 +62,7 @@ FORM main.
 
       CALL TRANSFORMATION id SOURCE data = <keyline> RESULT XML DATA(key_xml).
 
-      WRITE / 'ok'.
+      WRITE / <KEYLINE>.
 
       CALL FUNCTION 'Z_EXPIMP_TABLE_TEST'
         DESTINATION 'NONE'
