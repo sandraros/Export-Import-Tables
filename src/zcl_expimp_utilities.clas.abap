@@ -5,7 +5,7 @@
 CLASS zcl_expimp_utilities DEFINITION
   PUBLIC
   FINAL
-  CREATE PUBLIC .
+  CREATE PUBLIC.
 
   PUBLIC SECTION.
 
@@ -39,6 +39,44 @@ CLASS zcl_expimp_utilities DEFINITION
         tab_cpar TYPE tab_cpar
       RAISING
         zcx_expimp_table.
+
+    "! Version <ul>
+    "! <li>06: >= 6.10 UNICODE - Lengths are up to 4 bytes - 2 bytes per character?</li>
+    "! <li>05: >= 3.0G and < 6.10 ??? - Lengths are on 2 bytes - 1 byte per character?</li>
+    "! <li>04: >= 3.0G and < 6.10 ???</li>
+    "! <li>03: <= 3.0F ???</li>
+    "! <li>02: <= 3.0F ???</li>
+    "! <li>01: <= 3.0F ???</li>
+    "! </ul>
+    "! Miscellaneous <ul>
+    "! <li>ABAP release notes: In Release 3.x, the ABAP types 1 and 2 were still supported in some areas in a very basic manner to retain R/2 compatibility. This is no longer the case in Release 4.0</li>
+    "! <li>note 178482: The data types TYP1 and TYP2 are no longer allowed for data specifications. Instead, you must use the type D. Otherwise, a syntax error occurs.</li>
+    "! </ul>
+    TYPES ty_version TYPE x LENGTH 1.
+    CONSTANTS: BEGIN OF c_version,
+                 v06 TYPE ty_version VALUE '06',
+                 v05 TYPE ty_version VALUE '05',
+                 v04 TYPE ty_version VALUE '04',
+                 v03 TYPE ty_version VALUE '03',
+                 v02 TYPE ty_version VALUE '02',
+                 v01 TYPE ty_version VALUE '01',
+               END OF c_version.
+    TYPES: BEGIN OF ty_version_and_reader,
+             version TYPE ty_version,
+             reader  TYPE REF TO cl_abap_conv_in_ce,
+           END OF ty_version_and_reader.
+    METHODS get_version_and_reader
+      IMPORTING
+        dbuf          TYPE xstring
+      RETURNING
+        VALUE(result) TYPE ty_version_and_reader
+      RAISING
+        cx_sy_compression_error
+        zcx_expimp_table
+        cx_parameter_invalid_range
+        cx_sy_codepage_converter_init
+        cx_sy_conversion_codepage
+        cx_parameter_invalid_type.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -111,28 +149,6 @@ CLASS zcl_expimp_utilities DEFINITION
 
 * (1) Transport header
 
-    "! Version <ul>
-    "! <li>06: >= 6.10 UNICODE - Lengths are up to 4 bytes - 2 bytes per character?</li>
-    "! <li>05: >= 3.0G and < 6.10 ??? - Lengths are on 2 bytes - 1 byte per character?</li>
-    "! <li>04: >= 3.0G and < 6.10 ???</li>
-    "! <li>03: <= 3.0F ???</li>
-    "! <li>02: <= 3.0F ???</li>
-    "! <li>01: <= 3.0F ???</li>
-    "! </ul>
-    "! Miscellaneous <ul>
-    "! <li>ABAP release notes: In Release 3.x, the ABAP types 1 and 2 were still supported in some areas in a very basic manner to retain R/2 compatibility. This is no longer the case in Release 4.0</li>
-    "! <li>note 178482: The data types TYP1 and TYP2 are no longer allowed for data specifications. Instead, you must use the type D. Otherwise, a syntax error occurs.</li>
-    "! </ul>
-    TYPES ty_version TYPE x LENGTH 1.
-    CONSTANTS: BEGIN OF c_version,
-                 v06 TYPE ty_version VALUE '06',
-                 v05 TYPE ty_version VALUE '05',
-                 v04 TYPE ty_version VALUE '04',
-                 v03 TYPE ty_version VALUE '03',
-                 v02 TYPE ty_version VALUE '02',
-                 v01 TYPE ty_version VALUE '01',
-               END OF c_version.
-
     "! <ul>
     "! <li>01: BIG ENDIAN</li>
     "! <li>02: LITTLE ENDIAN</li>
@@ -166,6 +182,7 @@ CLASS zcl_expimp_utilities DEFINITION
     TYPES: ty_byte TYPE x LENGTH 1,
            x1      TYPE x LENGTH 1,
 
+           "! Header (16 bytes)
            BEGIN OF ty_transport_header,
              "! FF
              id              TYPE x1,
@@ -273,7 +290,7 @@ CLASS zcl_expimp_utilities DEFINITION
     TYPES:
       "! Object header
       BEGIN OF ty_object_header,
-        "! Object header before release 3.1 (version 01 to 03)
+        "! Object header before release 3.1 (versions 01 to 03) - 7 bytes
         BEGIN OF v01_03,
           "! Field type category
           id   TYPE ty_object_id,
@@ -283,12 +300,12 @@ CLASS zcl_expimp_utilities DEFINITION
           "! <p>For CLIKE types, how to know if one character is one or two bytes? Let's say version 06 means 2 bytes per character</p>
           "! <p>For deep types, it's 8 bytes (STRING, XSTRING, internal table, boxed)</p>
           leng TYPE x LENGTH 2,
-          "! Offset to next object (usually zero)
+          "! Length of the whole Object block including the header, useful to reach directly the next object; or zero if it's the last object
           next TYPE x LENGTH 2,
           "! Length of object name in number of characters
           nlen TYPE x1,
         END OF v01_03,
-        "! Object header for release 3.1 to 4.6 (version 04 to 05)
+        "! Object header for release 3.1 to 4.6 (versions 04 and 05) - 15 bytes
         BEGIN OF v04_05,
           "! Field type category
           id    TYPE ty_object_id,
@@ -296,14 +313,14 @@ CLASS zcl_expimp_utilities DEFINITION
           ityp  TYPE ty_ityp,
           "! Field length in number of bytes
           leng  TYPE x LENGTH 2,
-          "! Offset to next object (usually zero)
+          "! Length of the whole Object block including the header, useful to reach directly the next object; or zero if it's the last object
           next  TYPE x LENGTH 2,
           "! Length of object name in number of characters
           nlen  TYPE x1,
           "! Type identifier (check info)
           typid TYPE x LENGTH 8,
         END OF v04_05,
-        "! Object header for release 6.10 and higher (UNICODE) (version 06)
+        "! Object header for release 6.10 and higher (UNICODE) (version 06) - 32 bytes
         BEGIN OF uni,
           "! Field type category
           id    TYPE ty_object_id,
@@ -313,7 +330,7 @@ CLASS zcl_expimp_utilities DEFINITION
           decs  TYPE x1,
           "! Field length in number of bytes
           leng  TYPE x LENGTH 4,
-          "! Offset to next object (usually zero)
+          "! Length of the whole Object block including the header, useful to reach directly the next object; or zero if it's the last object
           next  TYPE x LENGTH 4,
           "! Length of object name in number of characters
           nlen  TYPE x1,
@@ -485,7 +502,8 @@ CLASS zcl_expimp_utilities DEFINITION
       RAISING
         zcx_expimp_table.
 
-    METHODS normalize_blob
+    "! If the 5th byte = '02', the BLOB must be uncompressed by kernel AB_IMPORT_DECOMPRESS
+    CLASS-METHODS normalize_blob
       CHANGING
                blob TYPE xstring
       RAISING  cx_sy_compression_error
@@ -495,9 +513,14 @@ CLASS zcl_expimp_utilities DEFINITION
       EXPORTING
         data TYPE any.
 
+    "! <p class="shorttext synchronized" lang="en"></p>
+    "!
+    "! @parameter data | <p class="shorttext synchronized" lang="en">Structure</p>
+    "! @parameter length | <p class="shorttext synchronized" lang="en"></p>
     METHODS read_blob_struct
       EXPORTING
-        data TYPE any.
+        data   TYPE any
+        length TYPE i.
 
     METHODS read_data_object2
       IMPORTING
@@ -552,6 +575,27 @@ CLASS zcl_expimp_utilities DEFINITION
         zcx_expimp_table.
 
     METHODS normalize_data_description
+      IMPORTING
+        up_to  TYPE ty_dd_id OPTIONAL
+      EXPORTING
+        lines2 TYPE ty_dd2_lines
+      CHANGING
+        lines  TYPE ty_dds
+      RAISING
+        zcx_expimp_table.
+
+    METHODS normalize_data_description_v3
+      IMPORTING
+        up_to                   TYPE ty_dd_id OPTIONAL
+        VALUE(alignment_offset) TYPE i DEFAULT 0
+      EXPORTING
+        lines2                  TYPE ty_dd2_lines
+      CHANGING
+        lines                   TYPE ty_dds
+      RAISING
+        zcx_expimp_table.
+
+    METHODS normalize_data_description_v6
       IMPORTING
         up_to  TYPE ty_dd_id OPTIONAL
       EXPORTING
@@ -635,7 +679,9 @@ CLASS zcl_expimp_utilities DEFINITION
           dd_off   TYPE i,
           len      TYPE i,
         END OF dv,
-      END OF current.
+      END OF current,
+      "! Last byte read by method BLOB_CURR_BYTE
+      curr_byte TYPE ty_byte.
 
     CONSTANTS null_object TYPE REF TO object VALUE IS INITIAL.
 
@@ -667,11 +713,12 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
   METHOD blob_curr_byte.
 
-    conv->read( IMPORTING data = byte len = DATA(len) ).
+    conv->read( IMPORTING data = curr_byte len = DATA(len) ).
     IF len = 0.
       RAISE EXCEPTION TYPE zcx_expimp_table.
     ENDIF.
     conv->skip_x( -1 ).
+    byte = curr_byte.
 
   ENDMETHOD.
 
@@ -892,54 +939,123 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD dbuf_import_create_data.
+  METHOD get_version_and_reader.
 
+    TYPES: ty_byte TYPE x LENGTH 1,
+           x1      TYPE x LENGTH 1,
+
+           "! Header (16 bytes)
+           BEGIN OF ty_transport_header,
+             "! FF
+             id              TYPE x LENGTH 1,
+             "! Version
+             version         TYPE x LENGTH 1,
+             "! Integer format
+             intformat       TYPE x LENGTH 1,
+             "! Float format
+             floatformat     TYPE x LENGTH 1,
+             "! Compress
+             compress        TYPE x LENGTH 1,
+             "! Data description
+             datadescription TYPE x LENGTH 1,
+             unused1         TYPE x LENGTH 2,
+             "! SAP Code Page (4 numeric characters in encoding US-ASCII
+             codepage        TYPE x LENGTH 4,
+             unused2         TYPE x LENGTH 4,
+           END OF ty_transport_header.
     DATA:
-      transport_header TYPE ty_transport_header.
+      transport_header        TYPE ty_transport_header,
+      transport_header_x      TYPE x LENGTH 16,
+      sap_codepage            TYPE cpcodepage,
+      dbuf2                   TYPE xstring,
+      transport_header_length TYPE i,
+      codepage                TYPE string.
 
-    normalize_blob( CHANGING blob = dbuf ).
+    " decompress export/import document if compressed
+    dbuf2 = dbuf.
+    normalize_blob( CHANGING blob = dbuf2 ).
+
+    " TRANSPORT HEADER
+    IF xstrlen( dbuf ) < 16.
+      RAISE EXCEPTION TYPE zcx_expimp_table.
+    ENDIF.
+    transport_header_x = dbuf(16).
+    result-reader = cl_abap_conv_in_ce=>create( encoding = '1100' input = transport_header_x ).
+    read_blob_struct( IMPORTING data = transport_header length = transport_header_length ).
+
+    result-version = transport_header-version.
+
+    sap_codepage = cl_abap_codepage=>convert_from(
+        source   = CONV xstring( transport_header-codepage )
+        codepage = 'US-ASCII' ).
+    codepage = cl_abap_codepage=>sap_to_http( sap_codepage ).
+
+    " Recreate CONV with right code page
+    result-reader = cl_abap_conv_in_ce=>create(
+            encoding = CONV #( sap_codepage )
+            endian   = COND #( WHEN transport_header-intformat = '01' THEN 'B' ELSE 'L' )
+            input    = dbuf ).
+    result-reader->skip_x( transport_header_length ).
+
+  ENDMETHOD.
+
+  METHOD dbuf_import_create_data.
 
     IF xstrlen( dbuf ) < 16.
       RAISE EXCEPTION TYPE zcx_expimp_table.
     ENDIF.
+    CASE dbuf+1(1).
+      WHEN '06'.
+*        partab = NEW zcl_expimp_v6_importer( dbuf )->run( ).
+      WHEN OTHERS.
+    ENDCASE.
 
-    DATA: transport_header_x TYPE x LENGTH 16.
-    transport_header_x = dbuf(16).
-    conv = cl_abap_conv_in_ce=>create( encoding = '1100' input = transport_header_x ).
-    read_blob_struct( IMPORTING data = transport_header ).
-
-    version = transport_header-version.
-    DATA(sap_codepage) = CONV cpcodepage( cl_abap_codepage=>convert_from(
-        source   = CONV xstring( transport_header-codepage )
-        codepage = 'US-ASCII' ) ).
-    DATA(codepage) = cl_abap_codepage=>sap_to_http( sap_codepage ).
-
-    conv = cl_abap_conv_in_ce=>create(
-            encoding = CONV #( sap_codepage )
-            endian   = COND #( WHEN transport_header-intformat = '01' THEN 'B' ELSE 'L' )
-            input    = dbuf ).
-    FREE dbuf.
-
-    " CONV restart the blob from position zero, so move after the transport header.
-    DESCRIBE FIELD transport_header LENGTH DATA(length) IN BYTE MODE.
-    conv->skip_x( length ).
-
-    DATA(xstring) = VALUE xstring( ).
-
-    DO.
-
-      CASE blob_curr_byte( ).
-        WHEN c_object_id-end_of_data. "04"
-          EXIT.
-        WHEN OTHERS.
-          current-dd = VALUE #( ).
-          current-dv = VALUE #( ).
-          process_data_object( ).
-      ENDCASE.
-
-    ENDDO.
-
-    partab = me->partab.
+*    DATA:
+*      transport_header TYPE ty_transport_header.
+*
+*    normalize_blob( CHANGING blob = dbuf ).
+*
+*    IF xstrlen( dbuf ) < 16.
+*      RAISE EXCEPTION TYPE zcx_expimp_table.
+*    ENDIF.
+*
+*    " TRANSPORT HEADER
+*    DATA: transport_header_x TYPE x LENGTH 16.
+*    transport_header_x = dbuf(16).
+*    conv = cl_abap_conv_in_ce=>create( encoding = '1100' input = transport_header_x ).
+*    read_blob_struct( IMPORTING data = transport_header length = DATA(transport_header_length) ).
+*
+*    version = transport_header-version.
+*
+*    DATA(sap_codepage) = CONV cpcodepage( cl_abap_codepage=>convert_from(
+*        source   = CONV xstring( transport_header-codepage )
+*        codepage = 'US-ASCII' ) ).
+*    DATA(codepage) = cl_abap_codepage=>sap_to_http( sap_codepage ).
+*
+*    " Recreate CONV with right code page
+*    conv = cl_abap_conv_in_ce=>create(
+*            encoding = CONV #( sap_codepage )
+*            endian   = COND #( WHEN transport_header-intformat = '01' THEN 'B' ELSE 'L' )
+*            input    = dbuf ).
+*    conv->skip_x( transport_header_length ).
+*    FREE dbuf. " Not needed anymore because it's in CONV
+*
+*    DATA(xstring) = VALUE xstring( ).
+*
+*    DO.
+*
+*      CASE blob_curr_byte( ).
+*        WHEN c_object_id-end_of_data. "04"
+*          EXIT.
+*        WHEN OTHERS.
+*          current-dd = VALUE #( ).
+*          current-dv = VALUE #( ).
+*          process_data_object( ).
+*      ENDCASE.
+*
+*    ENDDO.
+*
+*    partab = me->partab.
 
   ENDMETHOD.
 
@@ -948,18 +1064,17 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     " This code is copied from subroutine READ_BLOB of program RSINDX00 and adapted.
 
-    DATA l_off TYPE i.
-    DATA l_len TYPE i.
-    DATA lr_blob TYPE REF TO indx_clust_blob ##NEEDED.
-    DATA  datalen      TYPE p.
-    DATA:
-      BEGIN OF l_xdat,
-        srtf2  TYPE indx-srtf2,
-        clustr TYPE indx-clustr,
-        clustd TYPE x LENGTH 1000,
-      END OF l_xdat.
-    DATA l_otab LIKE TABLE OF l_xdat.
-    DATA l_stab LIKE TABLE OF l_xdat.
+    DATA: l_off   TYPE i,
+          l_len   TYPE i,
+          lr_blob TYPE REF TO indx_clust_blob ##NEEDED,
+          datalen TYPE p,
+          BEGIN OF l_xdat,
+            srtf2  TYPE indx-srtf2,
+            clustr TYPE indx-clustr,
+            clustd TYPE x LENGTH 1000,
+          END OF l_xdat,
+          l_otab LIKE TABLE OF l_xdat,
+          l_stab LIKE TABLE OF l_xdat.
 
     datalen = xstrlen( blob ).
 
@@ -968,6 +1083,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
     ENDIF.
 
     IF blob+4(1) = '02'. "compressed data
+      " re-format the XSTRING into data cluster
       l_off = 0.
       DO.
         IF l_off < datalen.
@@ -995,6 +1111,7 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
       CLEAR l_stab.
 
+
       LOOP AT l_otab REFERENCE INTO DATA(l_o).
         CONCATENATE blob l_o->clustd(l_o->clustr) INTO blob IN BYTE MODE.
       ENDLOOP.
@@ -1015,7 +1132,8 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
             END OF ty_dv,
             ty_dvs TYPE STANDARD TABLE OF ty_dv WITH EMPTY KEY.
     DATA: object_header_v04_05 TYPE ty_object_header-v04_05,
-          object_header_v01_03 TYPE ty_object_header-v01_03.
+          object_header_v01_03 TYPE ty_object_header-v01_03,
+          lines2               TYPE zcl_expimp_utilities=>ty_dd2_lines.
 
 
     "=====================
@@ -1056,13 +1174,9 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     normalize_data_description(
         IMPORTING
-            lines2 = DATA(lines2)
+            lines2 = lines2
         CHANGING
             lines  = current-dd-lines ).
-
-    normalize_data_description_end(
-        CHANGING
-            lines2 = lines2 ).
 
     IF lines( lines2 ) <> 1.
       RAISE EXCEPTION TYPE zcx_expimp_table.
@@ -1102,8 +1216,40 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
   METHOD normalize_data_description.
 
+    CASE version.
+
+      WHEN c_version-v01
+          OR c_version-v02
+          OR c_version-v03.
+
+        normalize_data_description_v3(
+            IMPORTING
+                lines2 = lines2
+            CHANGING
+                lines  = current-dd-lines ).
+        normalize_data_description_end(
+            CHANGING
+                lines2 = lines2 ).
+
+      WHEN c_version-v04
+          OR c_version-v05
+          OR c_version-v06.
+
+        normalize_data_description_v6(
+            IMPORTING
+                lines2 = lines2
+            CHANGING
+                lines  = current-dd-lines ).
+    ENDCASE.
+
+  ENDMETHOD.
+
+
+  METHOD normalize_data_description_v3.
+
     DATA:
-      dd_line2 TYPE ty_dd2.
+      dd_line2          TYPE ty_dd2,
+      filler_byte_count TYPE i.
     FIELD-SYMBOLS:
       <dd2_lines> TYPE ty_dd2_lines.
 
@@ -1129,20 +1275,85 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
         CREATE DATA dd_line2-components TYPE ty_dd2_lines.
         ASSIGN dd_line2-components->* TO <dd2_lines>.
 
-        IF dd_line2-id = c_dd_id-table-start
-            AND ( dd_line2-type = c_ityp-struct1
-                OR dd_line2-type = c_ityp-struct2 ).
-          " Add a dummy structure AB...AC to reflect the actual type
-          DATA(dd2_line_struct) = VALUE ty_dd2(
-              id         = c_dd_id-structure-start
-              type       = dd_line2-type
-              leng       = dd_line2-leng
+        CASE dd_line2-type.
+          WHEN c_ityp-int.
+            filler_byte_count = alignment_offset MOD 4.
+          WHEN c_ityp-float.
+            filler_byte_count = alignment_offset MOD 8.
+          WHEN c_ityp-struct1
+              OR c_ityp-struct2.
+            IF dd_line2-id = c_dd_id-table-start.
+              " Add a dummy structure AB...AC to reflect the actual type
+              DATA(dd2_line_struct) = VALUE ty_dd2(
+                  id         = c_dd_id-structure-start
+                  type       = dd_line2-type
+                  leng       = dd_line2-leng
+                  components = NEW ty_dd2_lines( ) ).
+              APPEND dd2_line_struct TO <dd2_lines>.
+              ASSIGN dd2_line_struct-components->* TO <dd2_lines>.
+            ENDIF.
+        ENDCASE.
+
+        IF filler_byte_count <> 0.
+          DATA(dd2_line_filler) = VALUE ty_dd2(
+              id         = c_dd_id-filler
+              type       = c_ityp-hex
+              leng       = filler_byte_count
               components = NEW ty_dd2_lines( ) ).
-          APPEND dd2_line_struct TO <dd2_lines>.
-          ASSIGN dd2_line_struct-components->* TO <dd2_lines>.
+          APPEND dd2_line_filler TO lines2.
         ENDIF.
 
-        normalize_data_description(
+        normalize_data_description_v3(
+          EXPORTING
+              up_to  = up_to_2
+              alignment_offset = alignment_offset
+          IMPORTING
+              lines2 = <dd2_lines>
+          CHANGING
+              lines  = lines ).
+
+      ENDIF.
+
+      APPEND dd_line2 TO lines2.
+
+      alignment_offset = alignment_offset + dd_line2-leng.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD normalize_data_description_v6.
+
+    DATA:
+      dd_line2          TYPE ty_dd2,
+      filler_byte_count TYPE i.
+    FIELD-SYMBOLS:
+      <dd2_lines> TYPE ty_dd2_lines.
+
+    LOOP AT lines REFERENCE INTO DATA(dd_line).
+
+      IF dd_line->id = up_to.
+        DELETE lines USING KEY loop_key.
+        EXIT.
+      ENDIF.
+
+      dd_line2 = CORRESPONDING #( dd_line->* ).
+
+      DELETE lines USING KEY loop_key.
+
+      DATA(up_to_2) = SWITCH ty_dd_id( dd_line2-id
+        WHEN c_dd_id-structure_include-start THEN c_dd_id-structure_include-end
+        WHEN c_dd_id-boxed_component-start   THEN c_dd_id-boxed_component-end
+        WHEN c_dd_id-structure-start         THEN c_dd_id-structure-end
+        WHEN c_dd_id-table-start             THEN c_dd_id-table-end ).
+
+      IF up_to_2 IS NOT INITIAL.
+
+        CREATE DATA dd_line2-components TYPE ty_dd2_lines.
+        ASSIGN dd_line2-components->* TO <dd2_lines>.
+
+        normalize_data_description_v6(
           EXPORTING
               up_to  = up_to_2
           IMPORTING
@@ -1160,31 +1371,33 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
   METHOD normalize_data_description_end.
 
-    IF lines( lines2 ) > 1.
-      CASE version.
-        WHEN c_version-v01
-          OR c_version-v02
-          OR c_version-v03.
-          CASE current-object-header_uni-id.
-            WHEN c_object_id-flat_structure
-                OR c_object_id-deep_structure.
-              lines2 = VALUE #(
-                    LET save_lines2 = lines2 IN
-                    ( id         = c_dd_id-structure-start
-                      components = NEW ty_dd2_lines( save_lines2 ) ) ).
-            WHEN c_object_id-flat_table
-                OR c_object_id-deep_table.
-              lines2 = VALUE #(
-                    LET save_lines2 = lines2 IN
-                    ( id         = c_dd_id-table-start
-                      components = NEW ty_dd2_lines(
-                        ( id         = c_dd_id-structure-start
-                          components = NEW ty_dd2_lines( save_lines2 ) ) ) ) ).
-            WHEN OTHERS.
-              RAISE EXCEPTION TYPE zcx_expimp_table.
-          ENDCASE.
-      ENDCASE.
-    ENDIF.
+    " TODO :
+    "   - what about non-structured tables?
+    "   - what about nested tables?
+    CASE version.
+      WHEN c_version-v01
+        OR c_version-v02
+        OR c_version-v03.
+        CASE current-object-header_uni-id.
+          WHEN c_object_id-flat_structure
+              OR c_object_id-deep_structure.
+            lines2 = VALUE #(
+                  LET save_lines2 = lines2 IN
+                  ( id         = c_dd_id-structure-start
+                    components = NEW ty_dd2_lines( save_lines2 ) ) ).
+          WHEN c_object_id-flat_table
+              OR c_object_id-deep_table.
+            lines2 = VALUE #(
+                  LET save_lines2 = lines2 IN
+                  ( id         = c_dd_id-table-start
+                    components = NEW ty_dd2_lines(
+                      ( id         = c_dd_id-structure-start
+                        components = NEW ty_dd2_lines( save_lines2 ) ) ) ) ).
+          WHEN OTHERS.
+            RAISE EXCEPTION TYPE zcx_expimp_table.
+        ENDCASE.
+    ENDCASE.
+*    ENDIF.
 
   ENDMETHOD.
 
@@ -1332,19 +1545,19 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
   METHOD read_blob_struct.
 
-    FIELD-SYMBOLS <x> TYPE x.
-
-    DATA(xstring) = VALUE xstring( ).
-    DESCRIBE FIELD data LENGTH DATA(length) IN BYTE MODE.
-    conv->read( EXPORTING n = length IMPORTING data = xstring ).
-
+*    FIELD-SYMBOLS:
+*      <x> TYPE x.
     DATA:
       conv2 TYPE REF TO cl_abap_conv_in_ce,
       view  TYPE REF TO cl_abap_view_offlen.
 
+    DATA(xstring) = VALUE xstring( ).
+    DESCRIBE FIELD data LENGTH length IN BYTE MODE.
+    conv->read( EXPORTING n = length IMPORTING data = xstring ).
+
     conv2 = cl_abap_conv_in_ce=>create(
               encoding = conv->encoding
-              endian = conv->endian ).
+              endian   = conv->endian ).
     view = cl_abap_view_offlen=>create_legacy_view( data ).
     conv->convert_struc(
           EXPORTING input = xstring
@@ -1428,16 +1641,15 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       dah_string_xstring TYPE ty_dah-string_xstring.
 
 
-    CASE current-dv-id.
+    IF current-dv-dd_off = 0.
+      " Start of Data Value
 
-      WHEN c_dv_id-single.
-        conv->skip_x( 1 ).
-        read_blob_dv( IMPORTING data = dv ).
+      CASE current-dv-id.
 
-      WHEN c_dv_id-interval-start.
+        WHEN c_dv_id-single.
+          conv->skip_x( 1 ).
 
-        IF current-dv-dd_off = 0.
-          " Start of Data Value
+        WHEN c_dv_id-interval-start.
           CASE version.
             WHEN c_version-v06.
               read_blob_struct( IMPORTING data = dah_interval_uni ).
@@ -1448,20 +1660,36 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
               ASSERT dah_interval-id = c_dv_id-interval-start.
               current-dv-len = dah_interval-len.
           ENDCASE.
+
+        WHEN c_dv_id-string_xstring-start.
+
+          read_blob_struct( IMPORTING data = dah_string_xstring ).
+          ASSERT dah_string_xstring-id = c_dv_id-string_xstring-start.
+
+        WHEN OTHERS.
+          RAISE EXCEPTION TYPE zcx_expimp_table.
+      ENDCASE.
+
+    ENDIF.
+
+
+
+    CASE current-dv-id.
+
+      WHEN c_dv_id-single.
+        read_blob_dv( IMPORTING data = dv ).
+        IF current-dv-dd_off = current-dv-len.
+          current-dv = VALUE #( id = blob_curr_byte( ) ).
         ENDIF.
 
+      WHEN c_dv_id-interval-start.
         read_blob_dv( IMPORTING data = dv ).
-
         IF current-dv-dd_off = current-dv-len.
           assert_blob_curr_byte_and_skip( c_dv_id-interval-end ).
           current-dv = VALUE #( id = blob_curr_byte( ) ).
         ENDIF.
 
       WHEN c_dv_id-string_xstring-start.
-
-        read_blob_struct( IMPORTING data = dah_string_xstring ).
-        ASSERT dah_string_xstring-id = c_dv_id-string_xstring-start.
-
         conv->read(
             EXPORTING n = COND #( WHEN version = c_version-v06
                 THEN dah_string_xstring-len / 2 ELSE dah_string_xstring-len )
@@ -1472,9 +1700,27 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
         assert_blob_curr_byte_and_skip( c_dv_id-string_xstring-end ).
         current-dv = VALUE #( id = blob_curr_byte( ) ).
 
-      WHEN OTHERS.
-        RAISE EXCEPTION TYPE zcx_expimp_table.
     ENDCASE.
+
+
+*      WHEN c_dv_id-string_xstring-start.
+*
+*        read_blob_struct( IMPORTING data = dah_string_xstring ).
+*        ASSERT dah_string_xstring-id = c_dv_id-string_xstring-start.
+*
+*        conv->read(
+*            EXPORTING n = COND #( WHEN version = c_version-v06
+*                THEN dah_string_xstring-len / 2 ELSE dah_string_xstring-len )
+*            IMPORTING data = dv ).
+*
+*        current-dv-dd_off = current-dv-dd_off + 8.
+*
+*        assert_blob_curr_byte_and_skip( c_dv_id-string_xstring-end ).
+*        current-dv = VALUE #( id = blob_curr_byte( ) ).
+*
+*      WHEN OTHERS.
+*        RAISE EXCEPTION TYPE zcx_expimp_table.
+*    ENDCASE.
 
   ENDMETHOD.
 
@@ -1532,12 +1778,15 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       WHEN c_version-v06.
         read_blob_struct( IMPORTING data = dah_table_uni ).
         ASSERT dah_table_uni-id = c_dv_id-table-start.
-      WHEN OTHERS.
+        current-dv-len = dah_table_uni-len.
+      WHEN c_version-v04
+            OR c_version-v05.
         read_blob_struct( IMPORTING data = dah_table ).
-        IF dah_table-id <> c_dv_id-table-start.
-          ASSERT 1 = 1.
-        ENDIF.
+        ASSERT dah_table-id = c_dv_id-table-start.
         current-dv-len = dah_table-len.
+      WHEN OTHERS.
+        " No table start
+        current-dv-len = current-object-header_uni-leng.
     ENDCASE.
     current-dv = VALUE #( id = blob_curr_byte( ) ).
 
@@ -1547,9 +1796,19 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
 
     DO.
 
-      IF blob_curr_byte( ) = c_dv_id-table-end.
-        EXIT.
-      ENDIF.
+      CASE version.
+        WHEN c_version-v01
+            OR c_version-v02
+            OR c_version-v03.
+          IF blob_curr_byte( ) <> c_dv_id-single.
+            EXIT.
+          ENDIF.
+        WHEN OTHERS.
+          IF blob_curr_byte( ) = c_dv_id-table-end.
+            conv->skip_x( 1 ).
+            EXIT.
+          ENDIF.
+      ENDCASE.
 
       CLEAR <line>.
       read_data_object2(
@@ -1561,8 +1820,6 @@ CLASS zcl_expimp_utilities IMPLEMENTATION.
       INSERT <line> INTO TABLE dv.
 
     ENDDO.
-
-    assert_blob_curr_byte_and_skip( c_dv_id-table-end ).
 
   ENDMETHOD.
 

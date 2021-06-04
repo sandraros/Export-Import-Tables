@@ -19,7 +19,9 @@ CLASS ltc_main DEFINITION
     METHODS itab_one_line FOR TESTING RAISING cx_static_check.
     METHODS itab_two_lines FOR TESTING RAISING cx_static_check.
     METHODS iso_8859_1 FOR TESTING RAISING cx_static_check.
-    METHODS version_03 FOR TESTING RAISING cx_static_check.
+    METHODS version_03_filler_actual FOR TESTING RAISING cx_static_check.
+    METHODS version_03_table FOR TESTING RAISING cx_static_check.
+    METHODS version_03_structure FOR TESTING RAISING cx_static_check.
     METHODS version_03_filler FOR TESTING RAISING cx_static_check.
 
     METHODS compare.
@@ -100,21 +102,6 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD itab_empty.
-
-    DATA: BEGIN OF line,
-            aaa TYPE c LENGTH 5,
-            bbb TYPE i,
-          END OF line,
-          itab LIKE TABLE OF line.
-
-    itab = VALUE #( ).
-    EXPORT the-itab = itab TO DATA BUFFER blob.
-
-    compare( ).
-
-  ENDMETHOD.
-
   METHOD itab_one_line.
 
     DATA: BEGIN OF line,
@@ -126,6 +113,23 @@ CLASS ltc_main IMPLEMENTATION.
     itab = VALUE #( ( aaa = |hello| bbb = 8 ) ).
     EXPORT the-itab = itab TO DATA BUFFER blob.
 
+    compare( ).
+
+  ENDMETHOD.
+
+  METHOD itab_empty.
+assert 1 = 1.
+    DATA: BEGIN OF line,
+            aaa TYPE c LENGTH 5,
+            bbb TYPE i,
+          END OF line,
+          itab LIKE TABLE OF line.
+
+    itab = VALUE #( ).
+*    DATA(itab) = VALUE string_table( ).
+assert 1 = 1.
+
+    EXPORT the-itab = itab TO DATA BUFFER blob.
     compare( ).
 
   ENDMETHOD.
@@ -199,7 +203,79 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD version_03.
+  METHOD version_03_table.
+
+    " In version 03, table IDs 'BE' and 'BF' don't exist, 'BB' is used to start each row
+
+    TYPES: BEGIN OF ty_vari,
+             cmp0001 TYPE c LENGTH 8,
+           END OF ty_vari,
+           tt_vari TYPE STANDARD TABLE OF ty_vari WITH EMPTY KEY.
+
+    DATA(vari) = VALUE tt_vari( ( cmp0001 = 'FUNC' ) ( cmp0001 = 'FUNC' ) ).
+    blob = 'FF030101010200003131303000000000' " Transport header version 03 (16 bytes)
+        && '03000008002C06' " Object header v03 (7 bytes)
+        && '255F56415249' " Object name : %_VARI
+        && 'AA000008' " AA=simple data description C 8
+        && 'BB46554E4320202020' " Line 1 - BB=single value - 'FUNC....' (. = space)
+        && 'BB46554E4320202020' " Line 2 - BB=single value - 'FUNC....' (. = space)
+        && '04'. " end
+
+    compare2( VALUE #(
+        ( name = '%_VARI' dref = REF #( vari ) ) ) ).
+
+  ENDMETHOD.
+
+  METHOD version_03_structure.
+
+    " In version 03, table IDs 'BC' and 'BD' don't exist
+
+    TYPES: BEGIN OF ty_vari,
+             cmp0001 TYPE c LENGTH 8,
+           END OF ty_vari.
+
+    DATA(vari) = VALUE ty_vari( cmp0001 = 'FUNC' ).
+    blob = 'FF030101010200003131303000000000' " Transport header version 03 (16 bytes)
+        && '0200005C002C06' " Object header v03 (7 bytes) : 02=structure, 00=type C, 005C=length 92, 002C=offset 44 to next OH, 06=name length (%_VARI)
+        && '255F56415249' " Object name : %_VARI
+        && 'AA000008' " C 8
+        && 'BB46554E4320202020' " FUNC
+        && '04'.
+
+    compare2( VALUE #(
+        ( name = '%_VARI' dref = REF #( vari ) ) ) ).
+
+  ENDMETHOD.
+
+  METHOD version_03_filler.
+
+    " In version 03, fillers are not described ('AF' in version 06)
+
+    TYPES: BEGIN OF ty_vari,
+             cmp0001 TYPE c LENGTH 8,
+             cmp0002 TYPE i,
+             cmp0003 TYPE c LENGTH 1,
+             cmp0004 TYPE i,
+           END OF ty_vari.
+
+    " The filler occupies 3 bytes between CMP0003 and CMP0004
+    DATA(vari) = VALUE ty_vari( cmp0001 = 'FUNC' cmp0003 = 'P' cmp0004 = 1 ).
+    blob = 'FF030101010200003131303000000000' " Transport header version 03 (16 bytes)
+        && '0200005C002C06' " Object header v03 (7 bytes)
+        && '255F56415249' " Object name : %_VARI
+        && 'AA000008' " C 8
+        && 'AA080004' " I
+        && 'AA000001' " C 1
+        && 'AA080004' " I
+        && 'BB46554E4320202020000000005000000000000001'
+        && '04'.
+
+    compare2( VALUE #(
+        ( name = '%_VARI' dref = REF #( vari ) ) ) ).
+
+  ENDMETHOD.
+
+  METHOD version_03_filler_actual.
 
     TYPES: BEGIN OF ty_vari,
              cmp0001 TYPE c LENGTH 8,
@@ -230,8 +306,35 @@ CLASS ltc_main IMPLEMENTATION.
     DATA(varivdat) = VALUE tt_varivdat( ). " internal table
     DATA(prot) = 'F'.
     DATA(func) = 'S'.
-    blob = 'FF03010101020000313130300000000003000060004106255F56415249AA000008AA080004AA000001AA080004AA000001AA00001EAA000001AA000001AA080004AA000001AA00001EAA000001AA000001'
-        && '0300001400250A255F5641524956444154AA000008AA000001AA000002AA080004AA08000401000001000D0450524F54BB4601000001000D0446554E43BB5304'.
+    blob = 'FF030101010200003131303000000000' " Transport header version 03 (16 bytes)
+        && '03000060004106' " Object header v03 (7 bytes) - flat table with lines of 96 bytes
+        && '255F56415249' " Object name : %_VARI
+        && 'AA000008' " C 8
+        && 'AA080004' " I
+        && 'AA000001' " C 1
+        && 'AA080004' " I     preceded with 3 alignment bytes
+        && 'AA000001' " C 1
+        && 'AA00001E' " C 30
+        && 'AA000001' " C 1
+        && 'AA000001' " C 1
+        && 'AA080004' " I     preceded with 3 alignment bytes
+        && 'AA000001' " C 1
+        && 'AA00001E' " C 30
+        && 'AA000001' " C 1
+        && 'AA000001' " C 1   followed by 3 alignment bytes
+        && '0300001400250A' " Object header v03 (7 bytes) - flat table with lines of 20 bytes
+        && '255F5641524956444154' " Object name : %_VARIVDAT
+        && 'AA000008' " C 8
+        && 'AA000001' " C 1
+        && 'AA000002' " C 2
+        && 'AA080004' " I     preceded with 1 alignment byte
+        && 'AA080004' " I
+        && '01000001000D04' " Object header v03 (7 bytes) - 1 character
+        && '50524F54BB46' " Object name : PROT
+        && '01000001000D04' " Object header v03 (7 bytes) - 1 character
+        && '46554E43BB53' " Object name : FUNC
+        && '04'.
+
     compare2( VALUE #(
         ( name = '%_VARI'     dref = REF #( vari ) )
         ( name = '%_VARIVDAT' dref = REF #( varivdat ) )
@@ -240,26 +343,16 @@ CLASS ltc_main IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD version_03_filler.
-
-    TYPES: BEGIN OF ty_vari,
-             cmp0001 TYPE c LENGTH 8,
-             cmp0002 TYPE i,
-             cmp0003 TYPE c LENGTH 1,
-             cmp0004 TYPE i,
-           END OF ty_vari,
-           tt_vari TYPE STANDARD TABLE OF ty_vari WITH EMPTY KEY.
-
-    " Implicit filler (not described with AF) of 3 bytes between CMP0003 and CMP0004
-    blob = 'FF0301010102000031313030000000000300005C002C06255F56415249AA000008AA080004AA000001AA080004BB46554E432020202000000000500000000000000104'.
-    cl_abap_unit_assert=>fail( msg = 'TODO' ).
-
-  ENDMETHOD.
-
   METHOD iso_8859_1.
 
-    " P_ACT_ID = 'SLSCN_COLLECT_DATA' (40C)
-    blob = 'FF0602010102800031313030000000000100000000002800000000080000000000000000000000000000000000000000505F4143545F4944BC00000028534C53434E5F434F4C4C4543545F4441544120202020202020202020202020202020202020202020BD04'.
+    " EXPORT P_ACT_ID = 'SLSCN_COLLECT_DATA' (40C)
+    blob = 'FF060201010280003131303000000000' " Transport header version 06 (16 bytes)
+        && '0100000000002800000000080000000000000000000000000000000000000000' " Object header v06 (32 bytes)
+        && '505F4143545F4944' " Object name : P_ACT_ID
+        && 'BC00000028'
+        && '534C53434E5F434F4C4C4543545F444154412020' " SLSCN_COLLECT_DATA (20 characters)
+        && '2020202020202020202020202020202020202020' " spaces (20 characters)
+        && 'BD04'.
 
     compare( ).
 
