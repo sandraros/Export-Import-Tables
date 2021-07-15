@@ -259,7 +259,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_expimp_table IMPLEMENTATION.
+CLASS ZCL_EXPIMP_TABLE IMPLEMENTATION.
 
 
   METHOD create_keytab_for_get_keys.
@@ -1207,7 +1207,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <wa_field>       TYPE any.
 
     xstring = VALUE #( ).
-    wa = CONV #( `` ).
+    CLEAR wa.
 
     DATA(info) = get_info( tabname ).
 
@@ -1341,6 +1341,4 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     ENDLOOP.
 
   ENDMETHOD.
-
-
 ENDCLASS.
