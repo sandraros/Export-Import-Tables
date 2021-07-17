@@ -259,7 +259,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_EXPIMP_TABLE IMPLEMENTATION.
+CLASS zcl_expimp_table IMPLEMENTATION.
 
 
   METHOD create_keytab_for_get_keys.
@@ -435,11 +435,12 @@ CLASS ZCL_EXPIMP_TABLE IMPLEMENTATION.
       <line> = CORRESPONDING #( BASE ( <line> ) wa ).
     ENDIF.
 
+    CREATE DATA ref_table TYPE TABLE OF (tabname).
+    ASSIGN ref_table->* TO <table>.
+
     " XSTRING
     IF properties-is_structure_one_row = abap_false.
 
-      CREATE DATA ref_table TYPE TABLE OF (tabname).
-      ASSIGN ref_table->* TO <table>.
       ASSIGN COMPONENT 'SRTF2' OF STRUCTURE <line> TO <srtf2>.
       ASSERT sy-subrc = 0.
       ASSIGN COMPONENT 'CLUSTR' OF STRUCTURE <line> TO <clustr>.
@@ -462,22 +463,17 @@ CLASS ZCL_EXPIMP_TABLE IMPLEMENTATION.
         ADD 1 TO <srtf2>.
       ENDWHILE.
 
-      MODIFY (tabname) FROM TABLE <table>.
-      IF sy-subrc <> 0.
-        RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>database_error.
-      ENDIF.
-
     ELSE.
 
       ASSIGN COMPONENT 'CLUSTD' OF STRUCTURE <line> TO <clustd>.
       ASSERT sy-subrc = 0.
       <clustd> = xstring.
 
-      MODIFY (tabname) FROM <line>.
-      IF sy-subrc <> 0.
-        RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>database_error.
-      ENDIF.
+    ENDIF.
 
+    MODIFY (tabname) FROM TABLE <table>.
+    IF sy-subrc <> 0.
+      RAISE EXCEPTION TYPE zcx_expimp_table EXPORTING textid = zcx_expimp_table=>database_error.
     ENDIF.
 
   ENDMETHOD.
