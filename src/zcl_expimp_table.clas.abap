@@ -343,7 +343,8 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <srtf2>    TYPE i,
       <clustr>   TYPE numeric,
       <clustd>   TYPE any,
-      <table>    TYPE STANDARD TABLE.
+      <table>    TYPE STANDARD TABLE,
+      <database_field> TYPE ANY.
 
 
     DATA(properties) = get_info( tabname ).
@@ -411,7 +412,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       " ID fields
       LOOP AT properties-id_fields ASSIGNING <id_field>.
 
-        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE <line> TO FIELD-SYMBOL(<database_field>).
+        ASSIGN COMPONENT <id_field>-fieldname OF STRUCTURE <line> TO <database_field>.
         ASSERT sy-subrc = 0.
 
         IF id_new IS NOT INITIAL.
@@ -431,9 +432,14 @@ CLASS zcl_expimp_table IMPLEMENTATION.
 
     ENDIF.
 
-    IF wa IS NOT INITIAL.
-      <line> = CORRESPONDING #( BASE ( <line> ) wa ).
-    ENDIF.
+    " Attribute fields
+    LOOP AT properties-attr_fieldnames ASSIGNING FIELD-SYMBOL(<attr_fieldname>).
+      ASSIGN COMPONENT <attr_fieldname> OF STRUCTURE <line> TO <database_field>.
+      ASSERT sy-subrc = 0.
+      ASSIGN COMPONENT <attr_fieldname> OF STRUCTURE wa TO FIELD-SYMBOL(<wa_field>).
+      <database_field> = <wa_field>.
+    ENDLOOP.
+
 
     CREATE DATA ref_table TYPE TABLE OF (tabname).
     ASSIGN ref_table->* TO <table>.
