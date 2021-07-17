@@ -43,15 +43,16 @@ CLASS zcl_expimp_table DEFINITION
 
     "! The advantage of the method IMPORT_ALL compared to the classic IMPORT ... FROM DATABASE ..., is that you may:<br/>
     "! <ul>
-    "! <li>Indicate the table name and the area dynamically</li>
-    "! <li>Read all the data objects of the data cluster, no need of
-    "! indicating the types and names of data objects to read.</li>
+    "! <li>indicate the table name and the area dynamically,</li>
+    "! <li>read all the data objects of the data cluster, no need of
+    "! indicating the types and names of data objects to read,</li>
+    "! <li>use the parameter ID_NEW (to be of "table_name" type) which is easier to use than ID (to comprise only the ID key fields).</li>
     "! </ul>
     "! Example:<br/>
     "! DATA(nummer) = CONV eufunc-nummer( 1 ).<br/>
     "! DATA(id_wa) = VALUE eufunc( gruppe = 'SCAL' name = 'DATE_GET_WEEK' nummer = nummer ).<br/>
     "! zcl_expimp_table=>import_all(<br/>
-    "! &nbsp;&nbsp;&nbsp;EXPORTING client = '100' table_name = 'EUFUNC' area = 'FL'<br/>
+    "! &nbsp;&nbsp;&nbsp;EXPORTING table_name = 'EUFUNC' area = 'FL'<br/>
     "! &nbsp;&nbsp;&nbsp;IMPORTING tab_cpar = DATA(tab_cpar)<br/>
     "! &nbsp;&nbsp;&nbsp;CHANGING  id_wa = id_wa.<br/>
     "! DATA(dref) = tab_cpar[ name = '%_IDATE' ]-dref.<br/>
