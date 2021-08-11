@@ -432,7 +432,13 @@ CLASS zcl_expimp_table IMPLEMENTATION.
     ENDIF.
 
     IF wa IS NOT INITIAL.
-      <line> = CORRESPONDING #( BASE ( <line> ) wa ).
+      LOOP AT properties-attr_fieldnames ASSIGNING FIELD-SYMBOL(<attr_fieldname>).
+        ASSIGN COMPONENT <attr_fieldname> OF STRUCTURE <line> TO FIELD-SYMBOL(<database_attr_field>).
+        IF sy-subrc = 0.
+          ASSIGN COMPONENT <attr_fieldname> OF STRUCTURE wa TO FIELD-SYMBOL(<wa_field>).
+          <database_attr_field> = <wa_field>.
+        ENDIF.
+      ENDLOOP.
     ENDIF.
 
     " XSTRING
@@ -1207,7 +1213,7 @@ CLASS zcl_expimp_table IMPLEMENTATION.
       <wa_field>       TYPE any.
 
     xstring = VALUE #( ).
-    wa = CONV #( `` ).
+    CLEAR wa.
 
     DATA(info) = get_info( tabname ).
 
