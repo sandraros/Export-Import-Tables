@@ -26,7 +26,7 @@ FUNCTION Z_EXPIMP_TABLE_TEST.
       zcl_expimp_table=>import_as_xstring(
         EXPORTING
           tabname = tabname
-          key     = <keyline>
+          id_new  = <keyline>
         IMPORTING
           xstring = DATA(xstring) ).
     CATCH zcx_expimp_table INTO DATA(lx3).
