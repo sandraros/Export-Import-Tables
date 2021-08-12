@@ -3,7 +3,7 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <PROGDIR>
-    <NAME>Z_EXPIMP_TABLE_SEARCH</NAME>
+    <NAME>Z_EXPIMP_TABLE_DEMO_VIEW</NAME>
     <DBAPL>S</DBAPL>
     <DBNA>D$</DBNA>
     <SUBC>1</SUBC>
@@ -14,8 +14,8 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Search in headers of Export/Import Tables</ENTRY>
-     <LENGTH>41</LENGTH>
+     <ENTRY>Show contents of any Export/Import Table</ENTRY>
+     <LENGTH>40</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

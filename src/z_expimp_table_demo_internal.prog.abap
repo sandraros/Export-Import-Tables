@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 *&
 *&---------------------------------------------------------------------*
-REPORT z_expimp_table_demo.
+REPORT z_expimp_table_demo_internal.
 
 CLASS lcl_app DEFINITION.
   PUBLIC SECTION.

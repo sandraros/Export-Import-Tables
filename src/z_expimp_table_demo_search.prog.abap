@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 *&
 *&---------------------------------------------------------------------*
-REPORT z_expimp_table_search LINE-SIZE 1023.
+REPORT z_expimp_table_demo_search LINE-SIZE 1023.
 
 CLASS lcl_app DEFINITION.
   PUBLIC SECTION.

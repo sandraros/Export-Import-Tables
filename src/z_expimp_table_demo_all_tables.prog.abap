@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 *&
 *&---------------------------------------------------------------------*
-REPORT z_expimp_table_list_tables.
+REPORT z_expimp_table_demo_all_tables.
 
 DATA gv_tabname TYPE tabname.
 SELECT-OPTIONS tabnames FOR gv_tabname.
