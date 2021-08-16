@@ -43,20 +43,9 @@ FORM main.
     zcl_expimp_table=>get_keys(
       EXPORTING
         tabname                 = tabname
-*    client                  =
-*    area                    =
-*    id                      =
-*    generic_key             = ABAP_FALSE
-*    with_user_header        = ABAP_FALSE
-*    client_specified        = ABAP_FALSE
       IMPORTING
         keytab                  = <keytab>
     ).
-*  CATCH zcx_expimp_table.    "
-*  CATCH cx_sy_client.    "
-*  CATCH cx_sy_generic_key.    "
-*  CATCH cx_sy_tabline_too_short.    "
-*  CATCH cx_sy_incorrect_key.    "
 
     LOOP AT <keytab> ASSIGNING FIELD-SYMBOL(<keyline>).
 
