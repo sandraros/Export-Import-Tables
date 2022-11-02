@@ -27,7 +27,8 @@ Demo programs:
   - It displays all Test Data from function module DATE_GET_WEEK, its input parameter DATE, and optionally its output parameter WEEK for regression testing.
 
 # Dependencies
-None
+- It requires ABAP 7.51 to fully compile (new cluster tables with data element `INDX_CLUST_BLOB`)
+- No other dependancy
 
 # Installation
 Use [abapGit](https://github.com/abapGit/abapGit)
