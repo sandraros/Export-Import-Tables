@@ -85,6 +85,26 @@
        <LENGTH>255</LENGTH>
        <TEXT>Error in internal data format</TEXT>
       </SOTR_TEXT>
+      <SOTR_TEXT>
+       <CONCEPT>690BB8396F051547E10000000A11447B</CONCEPT>
+       <LANGU>P</LANGU>
+       <OBJECT>B10A743C34F82776E10000000A1148E8</OBJECT>
+       <LFD_NUM>0001</LFD_NUM>
+       <FLAG_CNTXT>X</FLAG_CNTXT>
+       <STATUS>R</STATUS>
+       <LENGTH>255</LENGTH>
+       <TEXT>Erro em formato de dados interno.</TEXT>
+      </SOTR_TEXT>
+      <SOTR_TEXT>
+       <CONCEPT>690BB8396F051547E10000000A11447B</CONCEPT>
+       <LANGU>J</LANGU>
+       <OBJECT>2689783C9285DD55E10000000A114900</OBJECT>
+       <LFD_NUM>0001</LFD_NUM>
+       <FLAG_CNTXT>X</FLAG_CNTXT>
+       <STATUS>R</STATUS>
+       <LENGTH>255</LENGTH>
+       <TEXT>内部データ書式にエラーがあります</TEXT>
+      </SOTR_TEXT>
      </ENTRIES>
     </item>
    </SOTR>

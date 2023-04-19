@@ -752,16 +752,22 @@ CLASS zcl_expimp_table IMPLEMENTATION.
             dbuf = xstring
           IMPORTING
             directory = DATA(directory) ).
-        TRY.
-            cl_abap_expimp_utilities=>dbuf_convert(
-              EXPORTING
-                dbuf_in  = xstring
-                targ_rel = CONV #( sy-saprl )
-              IMPORTING
-                dbuf_out = DATA(xstring2) ).
-          CATCH cx_parameter_invalid_range.
-            ASSERT 1 = 1.
-        ENDTRY.
+
+        IF 0 = 1.
+          " debug helper
+          TRY.
+              DATA(targ_rel) = CONV i( sy-saprl ).
+              cl_abap_expimp_utilities=>dbuf_convert(
+                EXPORTING
+                  dbuf_in  = xstring
+                  targ_rel = targ_rel
+                IMPORTING
+                  dbuf_out = DATA(xstring2) ).
+            CATCH cx_root INTO DATA(error).
+              ASSERT 1 = 1.
+          ENDTRY.
+        ENDIF.
+
         tab_cpar = cl_abap_expimp_utilities=>dbuf_import_create_data( dbuf = xstring ).
 
       CATCH cx_sy_import_format_error INTO DATA(lx).
